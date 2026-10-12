@@ -1,121 +1,95 @@
 import json
-import tkinter.messagebox as messagebox
-import customtkinter as ctk
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QScrollArea, QLabel, QPushButton, QLineEdit, QPlainTextEdit, QComboBox, QCheckBox, QMessageBox
 from victor.config import PROVIDERS
 from victor.errors import VictorError
 
 
-class SettingsManager(ctk.CTkToplevel):
+class SettingsManager(QWidget):
     def __init__(self, app):
-        super().__init__(app)
-        self.app = app
-        self.title("VICTOR.IA · Configuración")
-        self.geometry("790x760")
-        self.transient(app)
-        self.fields = {}
-        ctk.CTkLabel(self, text="Tu asistente, tus preferencias", font=("Segoe UI", 22, "bold")).pack(pady=15)
-        self.body = ctk.CTkScrollableFrame(self)
-        self.body.pack(fill="both", expand=True, padx=20)
+        super().__init__()
+        self.app, self.fields = app, {}
+        layout = QVBoxLayout(self)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        body = QWidget()
+        form = QFormLayout(body)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         cfg = app.config.snapshot()
-        self.body.grid_columnconfigure(1, weight=1)
-        rows = [
-            ("provider", "Proveedor principal", PROVIDERS),
-            *[("model:"+p, "Modelo "+p, None) for p in PROVIDERS],
-            ("fallback", "Fallback (orden, separado por comas)", None),
-            ("temperature", "Temperatura (0–2)", None), ("max_tokens", "Máximo de tokens de salida", None),
-            ("name", "Nombre del asistente", None), ("personality", "Personalidad", "text"),
-            ("formality", "Formalidad", None), ("language", "Idioma / reconocimiento (es-EC)", None),
-            ("system_prompt", "Instrucciones personales", "text"),
-            ("theme", "Tema", ("Dark", "Light", "System")), ("security", "Seguridad (strict confirma todo)", ("normal", "strict")),
-            ("voice_mode", "Modo de micrófono", ("manual", "push-to-talk", "continua")),
-            ("voice_backend", "Reconocimiento", ("google", "whisper")),
-            ("wake_word", "Palabra de activación", None), ("voice_rate", "Velocidad de voz", None),
-            ("voice_id", "ID de voz SAPI (vacío = automático)", None), ("microphone", "ID micrófono (vacío = predeterminado)", None),
-            ("whisper_model", "Modelo Whisper local / ruta", None),
-            ("vision_provider", "Proveedor de visión", PROVIDERS), ("vision_model", "Modelo compatible con visión", None),
-            ("ollama_url", "Servidor Ollama local", None), ("context_chars", "Presupuesto de contexto (caracteres)", None),
-            ("network_timeout", "Timeout de red (segundos)", None),
-            ("allowed_folders", "Carpetas autorizadas (una ruta absoluta por línea)", "text"),
-            ("applications", 'Apps: JSON {"alias": "C:/ruta/app.exe"}', "text"),
-        ]
-        for index, (key, label, choices) in enumerate(rows):
-            ctk.CTkLabel(self.body, text=label, anchor="w", wraplength=280).grid(row=index, column=0, sticky="w", padx=8, pady=8)
-            value = cfg["models"][key[6:]] if key.startswith("model:") else cfg[key]
-            if key == "fallback":
-                value = ", ".join(value)
-            elif key == "allowed_folders":
-                value = "\n".join(value)
-            elif key == "applications":
-                value = json.dumps(value, ensure_ascii=False, indent=2)
-            if choices == "text":
-                widget = ctk.CTkTextbox(self.body, height=95, wrap="word")
-                widget.insert("1.0", str(value))
-            elif choices:
-                widget = ctk.CTkOptionMenu(self.body, values=list(choices))
-                widget.set(value)
+        choices = {"provider": PROVIDERS, "vision_provider": PROVIDERS, "theme": ("Dark", "Light", "System"),
+                   "security": ("normal", "strict"), "voice_mode": ("manual", "push-to-talk", "continua"),
+                   "voice_backend": ("whisper", "google"), "ollama_gpu": ("auto", "cpu"), "tts_backend": ("edge", "sapi"), "remote_high_policy": ("block", "pc")}
+        labels = {"provider": "Proveedor", "models": "Modelos por proveedor", "fallback": "Orden de respaldo (JSON)",
+                  "ollama_light": "Modo ligero: qwen2.5:3b", "ollama_gpu": "Ollama: auto GPU / CPU", "ollama_timeout": "Timeout Ollama (segundos)",
+                  "ollama_context": "Contexto Ollama (tokens)", "ollama_keep_alive": "Mantener modelo cargado", "applications": "Alias de aplicaciones (JSON)",
+                  "allowed_folders": "Carpetas autorizadas (JSON)", "system_prompt": "Instrucciones personales", "voice_backend": "Reconocimiento de voz",
+                  "voice_mode": "Modo de escucha", "wake_word": "Palabra de activación", "voice_enabled": "Leer respuestas en voz alta"}
+        for key, value in cfg.items():
+            if key == "models":
+                for provider in PROVIDERS:
+                    widget = QLineEdit(value[provider])
+                    self.fields["model:"+provider] = widget
+                    form.addRow("Modelo " + provider, widget)
+                continue
+            if isinstance(value, bool):
+                widget = QCheckBox()
+                widget.setChecked(value)
+            elif key in choices:
+                widget = QComboBox()
+                widget.addItems(choices[key])
+                widget.setCurrentText(str(value))
+            elif isinstance(value, (list, dict)) or key in ("system_prompt", "personality"):
+                widget = QPlainTextEdit(json.dumps(value, ensure_ascii=False, indent=2) if isinstance(value, (list, dict)) else value)
+                widget.setFixedHeight(90)
             else:
-                widget = ctk.CTkEntry(self.body)
-                widget.insert(0, str(value))
-            widget.grid(row=index, column=1, sticky="ew", padx=8, pady=6)
+                widget = QLineEdit(str(value))
             self.fields[key] = widget
-        self.search_var = ctk.BooleanVar(value=cfg["auto_search"])
-        ctk.CTkCheckBox(self.body, text="Buscar automáticamente información actual", variable=self.search_var).grid(row=len(rows), columnspan=2, pady=15)
-        self.error = ctk.CTkLabel(self, text="Las claves se leen únicamente desde .env o variables de entorno.", wraplength=730)
-        self.error.pack(pady=8)
-        ctk.CTkButton(self, text="Guardar configuración", command=self.save).pack(pady=(0, 18))
+            form.addRow(labels.get(key, key.replace("_", " ")), widget)
+        scroll.setWidget(body)
+        layout.addWidget(scroll)
+        self.error = QLabel("Claves únicamente en .env o variables de entorno.")
+        self.error.setWordWrap(True)
+        layout.addWidget(self.error)
+        save = QPushButton("Guardar configuración")
+        save.clicked.connect(self.save)
+        layout.addWidget(save)
 
     def save(self):
         if self.app.core.busy.is_set():
-            self.error.configure(text="Espera a que finalice el turno antes de cambiar la configuración.")
+            self.error.setText("Espera a que termine el turno.")
             return
         try:
-            values = {}
-            models = {}
+            old = self.app.config.snapshot()
+            values, models = {}, {}
             for key, widget in self.fields.items():
-                raw = widget.get("1.0", "end-1c") if isinstance(widget, ctk.CTkTextbox) else widget.get()
                 if key.startswith("model:"):
-                    models[key[6:]] = raw.strip()
-                elif key in ("max_tokens", "voice_rate", "context_chars", "network_timeout"):
-                    values[key] = int(raw)
-                elif key == "temperature":
-                    values[key] = float(raw)
-                elif key == "fallback":
-                    values[key] = [p.strip() for p in raw.split(",") if p.strip()]
-                elif key == "allowed_folders":
-                    values[key] = [p.strip().strip('"') for p in raw.splitlines() if p.strip()]
-                elif key == "applications":
-                    values[key] = json.loads(raw)
+                    models[key[6:]] = widget.text().strip()
+                    continue
+                if isinstance(widget, QCheckBox):
+                    value = widget.isChecked()
+                elif isinstance(widget, QComboBox):
+                    value = widget.currentText()
                 else:
-                    values[key] = raw.strip()
+                    raw = widget.toPlainText() if isinstance(widget, QPlainTextEdit) else widget.text()
+                    value = json.loads(raw) if isinstance(old[key], (dict, list)) else int(raw) if isinstance(old[key], int) else float(raw) if isinstance(old[key], float) else raw.strip()
+                values[key] = value
             values["models"] = models
-            values["auto_search"] = self.search_var.get()
-            self.app.config.validate({**self.app.config.snapshot(), **values})
-            sensitive = any(values[k] != self.app.config.get(k) for k in ("allowed_folders", "applications", "security"))
-            if sensitive and not messagebox.askyesno("Cambiar permisos", "Vas a cambiar carpetas, aplicaciones autorizadas o política de seguridad.\n\n¿Guardar estos permisos?", parent=self):
-                return
+            self.app.config.validate({**old, **values})
+            if any(values[k] != old[k] for k in ("security", "applications", "allowed_folders", "telegram_allowed_ids", "remote_high_policy", "remote_block_all")):
+                if QMessageBox.question(self, "Cambiar permisos", "¿Guardar estos cambios en permisos y aplicaciones autorizadas?") != QMessageBox.StandardButton.Yes:
+                    return
             self.app.voice_input.stop()
             self.app.config.save(values)
-            ctk.set_appearance_mode(values["theme"])
             self.app.refresh_config()
-            self.destroy()
-        except (ValueError, TypeError, VictorError) as exc:
-            self.error.configure(text=str(exc), text_color="#ef6b6b")
-        except OSError:
-            self.error.configure(text="No se pudo guardar la configuración. Comprueba el acceso a data/.")
+            self.error.setText("Configuración guardada. Reinicia para cambios de integraciones.")
+        except VictorError as exc:
+            self.error.setText(str(exc))
+        except (ValueError, TypeError):
+            self.error.setText("Revisa los números y el formato JSON de listas y aplicaciones.")
+        except Exception:
+            self.error.setText("No se pudo guardar la configuración. Revisa el registro local.")
 
 
 def example_args(schema):
-    result = {}
-    for key, prop in schema["properties"].items():
-        if "enum" in prop:
-            value = prop["enum"][0]
-        elif prop["type"] == ["array", "null"]:
-            value = None
-        elif prop["type"] == "integer":
-            value = prop.get("minimum", 0)
-        elif prop["type"] == "array":
-            value = ["ctrl", "a"]
-        else:
-            value = ""
-        result[key] = value
-    return result
+    return {k: p["enum"][0] if "enum" in p else None if p["type"] == ["array", "null"] else
+            p.get("minimum", 0) if p["type"] == "integer" else ["ctrl", "a"] if p["type"] == "array" else ""
+            for k, p in schema["properties"].items()}

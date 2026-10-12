@@ -28,6 +28,8 @@ def install_tools(core):
     add("delete_file", "Envía un archivo individual a la papelera; requiere confirmación explícita.", core.files.delete_file, Risk.HIGH, path=path)
     add("get_system_info", "CPU, RAM, disco, procesos y batería reales.", core.windows.get_system_info)
     add("control_volume", "Ajusta volumen entre 0 y 100.", core.windows.control_volume, Risk.MEDIUM, level={"type": "integer", "minimum": 0, "maximum": 100})
+    add("adjust_volume", "Sube o baja diez puntos el volumen, o silencia.", core.windows.adjust_volume, Risk.MEDIUM,
+        action={"type": "string", "enum": ["up", "down", "mute"]})
     add("open_settings", "Abre Configuración de Windows.", core.windows.open_settings)
     add("run_terminal", "Solo diagnósticos de lista blanca SIN argumentos. No permite shell ni scripts.", core.windows.run_diagnostic, Risk.HIGH,
         command={"type": "string", "enum": ["ipconfig", "whoami", "hostname", "systeminfo"]})

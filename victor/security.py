@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from dataclasses import dataclass, field
 from enum import IntEnum
 from pathlib import Path
@@ -23,6 +24,7 @@ class Approval:
     risk: Risk
     done: threading.Event = field(default_factory=threading.Event)
     accepted: bool = False
+    origin: dict | None = None
 
 
 class SecurityManager:
@@ -34,22 +36,49 @@ class SecurityManager:
     def __init__(self, config, emit):
         self.config, self.emit = config, emit
         self.log = logging.getLogger("victor.security")
+        self.context = threading.local()
+
+    def set_origin(self, origin):
+        self.context.origin = origin
+
+    def origin(self):
+        return getattr(self.context, "origin", None)
 
     def confirm(self, title, details, risk, cancel):
         check_cancel(cancel)
+        self.validate_origin()
+        origin = self.origin()
+        if origin:
+            if self.config.get("remote_block_all"):
+                raise VictorError("El control remoto está bloqueado desde el PC.")
+            if risk == Risk.HIGH and self.config.get("remote_high_policy") == "block":
+                raise VictorError("Acción de alto riesgo bloqueada por remoto. Ejecútala en el PC o habilita confirmación presencial en Ajustes.")
         if risk == Risk.LOW and self.config.get("security") != "strict":
             return
         request = Approval(title, details, risk)
+        request.origin = origin
         self.log.info("confirmation requested action=%s risk=%s", title, risk.name)
-        self.emit("approval", request)
+        self.emit("remote_approval" if origin and risk != Risk.HIGH else "approval", request)
+        deadline = time.monotonic()+120
         try:
             while not request.done.wait(0.1):
                 check_cancel(cancel)
+                if time.monotonic() > deadline:
+                    request.done.set()
+                    raise VictorError("La confirmación caducó. No se ejecutó la acción.")
             check_cancel(cancel)
+            self.validate_origin()
             if not request.accepted:
                 raise VictorError("Acción cancelada por el usuario.")
         finally:
             self.log.info("confirmation result action=%s accepted=%s cancelled=%s", title, request.accepted, cancel.is_set())
+
+    def validate_origin(self):
+        origin = self.origin()
+        if origin and (origin.get("source") != "telegram" or origin.get("user_id") not in self.config.get("telegram_allowed_ids")
+                       or self.config.get("remote_block_all") or self.config.get("telegram_paused")
+                       or not self.config.get("telegram_enabled")):
+            raise VictorError("Acceso remoto revocado, pausado o bloqueado desde el PC.")
 
     @staticmethod
     def url(value):

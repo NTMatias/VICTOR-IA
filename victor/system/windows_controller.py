@@ -39,6 +39,22 @@ class WindowsController:
         finally:
             comtypes.CoUninitialize()
 
+    def adjust_volume(self, action):
+        require_windows()
+        import comtypes
+        from pycaw.pycaw import AudioUtilities
+        comtypes.CoInitialize()
+        try:
+            endpoint = AudioUtilities.GetSpeakers().EndpointVolume
+            if action == "mute":
+                endpoint.SetMute(1, None)
+                return {"silenciado": True}
+            level = max(0, min(1, endpoint.GetMasterVolumeLevelScalar() + (0.1 if action == "up" else -0.1)))
+            endpoint.SetMasterVolumeLevelScalar(level, None)
+            return {"volumen": round(level * 100)}
+        finally:
+            comtypes.CoUninitialize()
+
     def open_settings(self):
         require_windows()
         os.startfile("ms-settings:")

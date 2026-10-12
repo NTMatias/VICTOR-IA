@@ -1,6 +1,6 @@
-# VICTOR.IA
+# VICTOR.IA v2
 
-Asistente de escritorio modular para **Windows 10/11 y Python 3.11+ de 64 bits**. Interfaz CustomTkinter, chat con streaming, cuatro proveedores de IA, herramientas supervisadas de Windows, memoria e historial SQLite y voz opcional.
+Asistente de escritorio modular para **Windows 10/11 y Python 3.11+ de 64 bits**. Interfaz PySide6 (Qt), chat con streaming, cuatro proveedores de IA, herramientas supervisadas de Windows, memoria e historial SQLite y voz opcional.
 
 ## Instalar y abrir
 
@@ -34,19 +34,19 @@ En **Configuración** selecciona proveedor, modelo, temperatura y tokens. Los no
 Ejemplo de preparación de Ollama, **fuera del asistente**:
 
 ```powershell
-ollama pull llama3.2
+ollama pull qwen2.5:7b
 ollama serve
 ```
 
 Si Ollama ya está ejecutándose no necesitas `ollama serve`. Selecciona **Ollama** y el nombre exacto del modelo descargado. Solo se aceptan servidores de loopback locales. Un modelo con visión se configura por separado; un modelo de texto no puede analizar imágenes.
 
-**Fallback**: escribe proveedores separados por comas, por ejemplo `Gemini, Ollama`. El principal se intenta primero; si falta su clave o falla, se prueba el siguiente y se informa del cambio. Está vacío inicialmente para no enviar conversaciones a proveedores adicionales sin configurarlos. En visión se utiliza solo el proveedor de visión seleccionado, sin fallback silencioso de imágenes. Una respuesta parcial fallida se borra antes de mostrar la del respaldo.
+**Fallback**: escribe una lista JSON, por ejemplo `["Gemini", "Ollama"]`. El principal se intenta primero; si falta su clave o falla, se prueba el siguiente y se informa del cambio. Está vacío inicialmente para no enviar conversaciones a proveedores adicionales sin configurarlos. En visión se utiliza solo el proveedor de visión seleccionado, sin fallback silencioso de imágenes. Una respuesta parcial fallida se borra antes de mostrar la del respaldo.
 
 ## Uso
 
 - **Enter** envía; **Mayús+Enter** agrega una línea. Hay streaming de texto de todos los adaptadores.
 - **Detener** corta la voz, cancela confirmaciones y evita las siguientes acciones. Una petición de red ya iniciada puede tardar hasta el timeout en devolver el control; las acciones completadas no se deshacen.
-- **Nueva conversación**, búsqueda y eliminación están en la columna izquierda. El historial vuelve a aparecer al abrir la aplicación.
+- **Nueva conversación**, búsqueda y eliminación están en el panel lateral ☰ → Historial. El historial vuelve a aparecer al abrir la aplicación.
 - En **Herramientas** selecciona una operación, edita los argumentos JSON y pulsa Ejecutar. No necesitas IA para usarlas.
 - En **Memoria** escribe una clave y su valor, guárdalo, búscalo o elimínalo. Los cambios piden confirmación.
 - En **Configuración** puedes editar nombre, personalidad, formalidad, idioma, instrucciones, tema, voz, modelos, seguridad, carpetas y aliases de aplicaciones.
@@ -69,7 +69,7 @@ La conversación libre y la interpretación de órdenes no incluidas en la gram�
 
 ## Archivos, aplicaciones y permisos
 
-La carpeta `workspace/`, creada automáticamente, es la única raíz autorizada por defecto. Añade otras **rutas absolutas**, una por línea, en Configuración. No autorices todo tu disco. Las rutas relativas se resuelven dentro de la primera raíz.
+La carpeta `workspace/`, creada automáticamente, es la única raíz autorizada por defecto. Añade otras **rutas absolutas** como lista JSON, por ejemplo `["C:/Users/TuUsuario/Documents/Trabajo"]`, en Ajustes. No autorices todo tu disco. Las rutas relativas se resuelven dentro de la primera raíz.
 
 - Se bloquean carpetas del sistema, datos internos del asistente, `.env`, enlaces simbólicos/junctions, rutas UNC/dispositivos, flujos NTFS y rutas fuera de las raíces autorizadas.
 - Crear archivos admite texto (`txt`, `md`, `csv`, `json`, `log`, `yaml`, `yml`). No crea ejecutables ni scripts. Nunca sobrescribe destinos existentes.
@@ -78,7 +78,7 @@ La carpeta `workspace/`, creada automáticamente, es la única raíz autorizada 
 - Las aplicaciones iniciales incluyen calculadora, bloc de notas, Paint, explorador y navegadores conocidos. Puedes registrar aliases con un JSON como `{"editor": "C:/Apps/Editor/editor.exe"}`. Solo acepta `.exe` existentes y bloquea intérpretes y herramientas administrativas conocidas. Registra exclusivamente programas que conozcas.
 - Cerrar aplicaciones usa terminación de proceso y **puede perder cambios sin guardar**. Por ello requiere autorización y muestra una advertencia. Algunas aplicaciones de Windows usan un proceso distinto del lanzador; en ese caso no se cierran y se informa.
 
-**Riesgos:** bajo = ejecución directa; medio = diálogo con parámetros exactos; alto = diálogo y escribir `EJECUTAR`. `strict` también confirma operaciones de bajo riesgo. No existe modo que elimine las confirmaciones de alto riesgo. Cada solicitud y su resultado se registran, sin guardar cuerpos con claves.
+**Riesgos:** bajo = ejecución directa; medio = tarjeta de confirmación dentro del chat con parámetros exactos; alto = diálogo y escribir `EJECUTAR`. `strict` también confirma operaciones de bajo riesgo. No existe modo que elimine las confirmaciones de alto riesgo. Cada solicitud y su resultado se registran, sin guardar cuerpos con claves.
 
 La terminal está limitada a `ipconfig`, `whoami`, `hostname` y `systeminfo`, **sin argumentos**, siempre con confirmación explícita y `shell=False`. Los comandos arbitrarios, instalación de software, edición del registro y elevación administrativa están **deliberadamente deshabilitados**. La IA no puede modificar las listas de permisos.
 
@@ -88,33 +88,53 @@ Cada acción pasa por seguridad y necesita el **título exacto de la ventana**. 
 
 PyAutoGUI mantiene `FAILSAFE=True`: mueve el puntero a una esquina para abortar. Se ejecutan acciones individuales, no macros ilimitadas. Un clic o atajo puede tener consecuencias en la aplicación destino: revisa los parámetros del diálogo.
 
-## Voz
+## Voz local
 
-El instalador intenta instalar cada dependencia de voz por separado. Si falla alguna, el chat continúa disponible. Entrada: `SpeechRecognition` + `sounddevice` + `numpy`, sin necesidad de PyAudio. Salida: `pyttsx3` y SAPI en un proceso aislado y cancelable.
-
-- **Manual:** pulsa Micrófono para capturar una frase, terminando por silencio o a los 15 segundos.
-- **Push-to-talk:** mantén presionado Micrófono; suelta para transcribir, máximo 15 segundos.
-- **Continua:** activa Micrófono y di **VICTOR** antes del comando. No escucha durante el procesamiento de un turno ni mientras reproduce su propia voz.
-- El interruptor **Voz** activa/desactiva la lectura de respuestas. Puedes elegir velocidad e ID de una voz instalada de Windows.
-
-El modo Google envía audio para reconocimiento y solicita consentimiento al activarlo. La wake word se detecta **después de transcribir**, no mediante un motor local especializado; en modo continuo también se transcriben segmentos que finalmente se descartan por no contener la palabra. Depende del ruido, pronunciación y disponibilidad del servicio.
-
-Para reconocimiento local alternativo:
+El instalador intenta instalar las dependencias opcionales por separado. El chat arranca aunque fallen. La entrada predeterminada es **faster-whisper, base, CPU int8**; no requiere GPU. Para descargar el modelo una sola vez (Internet y espacio libre):
 
 ```powershell
-.venv\Scripts\python -m pip install faster-whisper
 .venv\Scripts\python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')"
 ```
 
-El segundo comando descarga el modelo; puede ocupar cientos de MB. Después selecciona `whisper` y `base` en Configuración. El asistente exige que el modelo esté descargado (`local_files_only=True`) para no iniciar descargas imprevistas. Puede usarse una ruta a un modelo local. La velocidad depende de tu CPU. El chat y herramientas no dependen de Whisper.
+El ZIP no incluye modelos. La aplicación exige la copia local y muestra instrucciones si falta; no inicia descargas ocultas. Puedes elegir `small` o una ruta de modelo en Ajustes. Usa hasta cuatro hilos CPU y comparte una instancia entre micrófono y Telegram.
 
-Si el micrófono predeterminado falla, permite el acceso a micrófonos para aplicaciones de escritorio en Windows. Para enumerar dispositivos:
+- **Manual:** pulsa el círculo de micrófono para una frase; termina por silencio o a los 15 segundos.
+- **Push-to-talk:** mantén presionado el botón y suelta para transcribir.
+- **Continua:** activa el micrófono y di VICTOR antes de la primera orden. Durante `conversation_window` (45 segundos por defecto) acepta órdenes siguientes sin repetir el nombre; luego vuelve a exigirlo. Se suspende durante IA y reproducción de voz.
+- `wake_word` permite VICTOR o Victoria. Se reconoce después de transcribir, no con un detector especializado de baja potencia. La onda es un indicador animado de escucha, no amplitud del audio.
+- Activa **Leer respuestas en voz alta** para TTS: `edge` envía el texto a Microsoft y necesita Internet; si falla intenta SAPI/pyttsx3. `sapi` usa directamente Windows sin red. La salida corre en un proceso cancelable. `edge_voice` predeterminada: `es-EC-LuisNeural`; velocidad/ID SAPI se configuran por separado.
+- Google sigue como STT alternativo; la GUI pide consentimiento porque envía audio a Internet.
 
-```powershell
-.venv\Scripts\python -c "import sounddevice; print(sounddevice.query_devices())"
-```
+Si no hay micrófono, la aplicación lo informa y propone notas de voz por Telegram. Revisa permisos de micrófono de Windows o enumera dispositivos con `.venv\Scripts\python -c "import sounddevice; print(sounddevice.query_devices())"` y configura su índice en `microphone`. El umbral de voz es fijo; ruido o un micrófono débil pueden perjudicarlo.
 
-Introduce el ID del dispositivo de entrada en Configuración. El umbral de voz es fijo y puede funcionar peor con micrófonos muy débiles o ambientes ruidosos.
+## Telegram y celular como micrófono
+
+1. Crea un bot en **@BotFather** dentro de Telegram (`/newbot`). No publiques su token.
+2. Añade `TELEGRAM_BOT_TOKEN` a `.env` y reinicia VICTOR.IA.
+3. Abre ☰ → **Conectar** → **Activar / detener Telegram**. Espera el aviso de conexión.
+4. Pulsa **Generar código de emparejamiento**. En tu chat privado con el bot escribe `/vincular CODIGO`. Caduca en 120 segundos, se usa una vez y admite cinco intentos. El ID queda en `telegram_allowed_ids` en Ajustes; puedes revocarlo allí.
+5. Envía texto o una nota de voz (máximo 60 segundos/15 MB). El audio se descarga temporalmente, se transcribe localmente con Whisper y muestra la transcripción. Requiere haber descargado el modelo. Texto, voz y PC usan el mismo VictorCore y registro de herramientas.
+
+No acepta grupos ni usuarios desconocidos. Usa polling, sin abrir puertos. La GUI muestra la orden e ID remitente; logs registran usuario, hora, herramienta y resultado. Telegram transporta texto/audio/capturas mediante sus servidores; este canal no es un chat secreto de extremo a extremo.
+
+Comandos: `/estado`, `/captura`, `/pausa`, `/reanudar`, `/ayuda`. El botón del PC detiene el servicio; pausa conserva la conexión pero impide órdenes. Límite predeterminado: seis órdenes por usuario cada 30 segundos. `remote_block_all` bloquea control remoto desde el PC y no puede desactivarse desde el bot.
+
+Riesgo medio: botones inline Confirmar/Cancelar ligados al usuario, chat y acción; caducan en 120 segundos. Riesgo alto (borrar, terminal, escribir texto, Enter/Delete): **bloqueado por defecto** (`remote_high_policy=block`). Con `pc` exige escribir **EJECUTAR en la ventana del PC**, nunca en Telegram. Se vuelven a comprobar permisos después de la confirmación. `/captura` siempre confirma y advierte de la transferencia a Telegram. Confirmaciones demasiado extensas se muestran completas en el PC.
+
+## Spotify
+
+1. Crea una aplicación en [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), habilita Web API y registra exactamente `http://127.0.0.1:8888/callback` como redirect URI.
+2. Configura `SPOTIPY_CLIENT_ID`, `SPOTIPY_CLIENT_SECRET` y `SPOTIPY_REDIRECT_URI` en `.env`; reinicia.
+3. ☰ → **Conectar** → **Conectar Spotify** abre OAuth en tu navegador (máximo 120 segundos). El receptor temporal escucha solo en 127.0.0.1. El token se guarda cifrado con DPAPI de Windows en `data/spotify.oauth`; no se guarda en texto plano.
+4. Necesitas una cuenta Premium con acceso permitido a tu aplicación y Spotify activo en el PC. Empieza una reproducción allí. Opcionalmente fija su ID con `SPOTIPY_DEVICE_ID`.
+
+Prueba «Reproduce DTMF en Spotify», «Pausa Spotify», «Siguiente en Spotify», «Anterior en Spotify», «Qué suena en Spotify» y «Mis playlists de Spotify». Las herramientas incluyen volumen (0–100), búsqueda y reproducción, estado actual y hasta 50 playlists. Modificar reproducción requiere confirmación. Se consulta la pista real después de reproducir; si todavía no coincide se informa como no confirmada. Sin Premium o dispositivo activo se explica el problema y se intenta abrir la app. Si no se encuentra, registra su ejecutable en `applications` como alias `spotify`.
+
+## Google y remoto web/QR (opcionales diferidos)
+
+Gmail, Calendar y Drive con OAuth propio **no están implementados en esta versión**. La clave Gemini solo habilita IA; no concede acceso a esos servicios. Por ello no aparece una tarjeta proactiva con correos o eventos.
+
+Tampoco se incluye servidor FastAPI/WebSocket, trackpad web, pantalla en directo, código QR ni grabación móvil con HTTPS. No hay certificados ni opciones SCREEN_FPS/SCREEN_QUALITY inoperantes. El canal móvil implementado es Telegram con notas de voz. Estos elementos eran opcionales en el alcance solicitado y quedan explícitamente diferidos.
 
 ## Pantalla, visión y búsqueda
 
@@ -122,13 +142,13 @@ Introduce el ID del dispositivo de entrada en Configuración. El umbral de voz e
 
 Para «¿Qué hay en mi pantalla?» configura un proveedor y modelo de **visión**. Antes de transmitir una captura aparece el proveedor, archivo y pregunta en una confirmación. Sin clave o con un modelo no compatible se muestra un error; no se inventa un análisis. El permiso es por captura, no permanente.
 
-La búsqueda usa DuckDuckGo, con timeout y caché de cinco minutos. Se detectan expresiones como noticias, hoy, precio, busca e investiga; también puede solicitarla el modelo. Se leen hasta cuatro páginas HTML, con tamaño limitado, sin redirects automáticos y rechazando direcciones privadas/locales. Páginas bloqueadas, de contenido dinámico o no HTML pueden dejar solo el extracto del buscador. Las respuestas incorporan las fuentes y las limitaciones de lectura. Los resultados son datos no confiables, nunca autorización para actuar.
+La búsqueda usa `ddgs` (sustituye `duckduckgo-search`), con timeout y caché de cinco minutos. Se detectan expresiones como noticias, hoy, precio, busca e investiga; también puede solicitarla el modelo. Se leen hasta cuatro páginas HTML, con tamaño limitado, sin redirects automáticos y rechazando direcciones privadas/locales. Páginas bloqueadas, de contenido dinámico o no HTML pueden dejar solo el extracto del buscador. Las respuestas incorporan las fuentes y las limitaciones de lectura. Los resultados son datos no confiables, nunca autorización para actuar.
 
 ## Arquitectura y datos
 
 `main.py` inicia la aplicación. `victor/core.py` coordina un turno por vez, los adaptadores de `ai/` generan peticiones, y `tools/registry.py` valida esquemas y consulta `SecurityManager` antes de ejecutar. Los plugins son registros internos explícitos; no se carga código arbitrario descargado.
 
-La GUI usa una cola de eventos y solo el hilo principal toca Tk. Red, herramientas y reconocimiento corren fuera del hilo de interfaz. La síntesis vive en un proceso separado. Cerrar cancela tareas y espera a los trabajadores de forma no bloqueante; existe un límite de cierre (timeout de red + 15 segundos) para servicios/controladores que no responden. Los trabajadores pendientes son daemon como último recurso; no se promete interrumpir de inmediato código nativo de terceros.
+La GUI usa una cola de eventos y solo el hilo principal toca Qt. Red, herramientas y reconocimiento corren fuera del hilo de interfaz. La síntesis vive en un proceso separado. Cerrar cancela tareas y espera a los trabajadores de forma no bloqueante; existe un límite de cierre (timeout de red + 15 segundos) para servicios/controladores que no responden. Los trabajadores pendientes son daemon como último recurso; no se promete interrumpir de inmediato código nativo de terceros.
 
 `data/` contiene SQLite, configuración, logs rotativos (2 MB × 5 archivos) y capturas. Son datos **locales sin cifrar**. No se registran claves API ni cuerpos HTTP. Los proveedores online reciben mensajes, contexto y recuerdos seleccionados para responder. Copia `data/` con la aplicación cerrada para respaldar la información. No compartas esa carpeta si contiene información privada.
 
@@ -155,7 +175,7 @@ El contexto usa un presupuesto de caracteres, mensajes recientes y recuerdos rel
 .venv\Scripts\python main.py --smoke-test data\smoke.json
 ```
 
-La última prueba abre una ventana real, guarda título/visibilidad/geometría y, si `mss` está disponible, una captura; después cierra. Las pruebas unitarias no usan claves, no gastan saldo, no controlan aplicaciones personales ni borran archivos reales. La prueba de papelera usa un mock; consulta `VERIFICACION.md` para saber qué se ejecutó de verdad antes de esta entrega.
+La última prueba abre una ventana real, guarda título/visibilidad/geometría y una captura del propio widget Qt (no del escritorio externo); después cierra. Las pruebas unitarias no usan claves, no gastan saldo, no controlan aplicaciones personales ni borran archivos reales. La prueba de papelera usa un mock; consulta `VERIFICACION.md` para saber qué se ejecutó de verdad antes de esta entrega.
 
 ## Documentación oficial de las integraciones
 
@@ -165,3 +185,16 @@ La última prueba abre una ventana real, guarda título/visibilidad/geometría y
 - [Ollama Chat API](https://docs.ollama.com/api/chat)
 
 Los servicios externos, modelos, cuotas y hardware no se incluyen en el proyecto. Las funciones deshabilitadas deliberadamente se explican arriba; no hay acciones simuladas que se presenten como realizadas.
+
+## Ajustes de v2 y solución de problemas
+
+- La ventana se adapta hasta 420 px. CPU/RAM/red son medidas reales cada dos segundos; red significa tráfico total local de interfaces, no velocidad contratada. La onda se detiene con la ventana inactiva.
+- Ollama usa `qwen2.5:7b`; en un i5-8400 sin GPU puede ser lento. Activa `ollama_light` y descarga `ollama pull qwen2.5:3b`. `/api/tags` comprueba disponibilidad antes de pedir inferencia. Configura `ollama_timeout` (180 s), `ollama_keep_alive` (`5m`) y contexto (4096 tokens). `ollama_gpu=cpu` fuerza CPU; `auto` deja la selección a Ollama. Se detectan GPU NVIDIA mediante nvidia-smi; una ausencia no descarta otros dispositivos compatibles con Ollama.
+- Configuraciones existentes se conservan: al actualizar desde v1, selecciona explícitamente Whisper, el nuevo modelo Ollama y edge si quieres cambiar tus preferencias anteriores.
+- «Abre word» funciona cuando `word` está registrado en `applications`; alias de argumentos app/app_name/application/nombre/program se normalizan a name. Un esquema inválido permite al modelo una sola corrección automática.
+- Capturas: primero MSS, después ImageGrab. Una sesión bloqueada, remota o protegida puede impedir ambas. Se informa sin afirmar que se capturó. El resultado de Calculadora distingue solicitud de lanzamiento de ventana visible verificada.
+- Telegram no conecta: revisa token, conectividad y otra instancia que esté haciendo polling. Si falta la biblioteca, reejecuta instalar.bat o instala solo python-telegram-bot en .venv. Los cambios en .env requieren reinicio.
+- Spotify no conecta: revisa URI exacta, puerto 8888 libre, permisos de tu cuenta en Dashboard y token DPAPI asociado al mismo usuario Windows. No se puede migrar el token cifrado a otro usuario: vuelve a conectar.
+- Si una función opcional no se instaló, el instalador lo avisa; el chat sigue funcionando. Python 3.12 de 64 bits es la versión comprobada. No se comprobó una instalación nueva en todas las versiones posteriores de Python.
+
+Documentación: [ddgs](https://github.com/deedy5/ddgs), [Ollama tags](https://docs.ollama.com/api/tags), [python-telegram-bot](https://docs.python-telegram-bot.org/en/stable/), [Spotipy](https://spotipy.readthedocs.io/en/2.26.0/), [Spotify redirect URI](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri).

@@ -33,13 +33,20 @@ class ToolRegistry:
     def specs(self):
         return [{"name": t.name, "description": t.description, "parameters": t.schema} for t in self.tools.values()]
 
-    def execute(self, name, args):
+    def execute(self, name, args, notify_validation=True):
         start = time.monotonic()
         try:
             check_cancel(self.cancel)
             tool = self.tools.get(name)
             if tool is None:
                 raise VictorError("Herramienta desconocida; no se ejecutó nada.")
+            if name in ("open_application", "close_application") and isinstance(args, dict):
+                args = dict(args)
+                for alias in ("app", "app_name", "application", "nombre", "program"):
+                    if alias in args:
+                        if "name" in args and args["name"] != args[alias]:
+                            raise jsonschema.ValidationError("Aliases contradictorios: especifica únicamente name.")
+                        args["name"] = args.pop(alias)
             jsonschema.validate(args, tool.schema)
             args = json.loads(json.dumps(args))
             for key in ("path", "source", "destination"):
@@ -55,7 +62,7 @@ class ToolRegistry:
                 risk = Risk.HIGH
             if name == "type_text":
                 risk = Risk.HIGH  # el texto podría terminar en una consola
-            details = json.dumps(args, ensure_ascii=False, indent=2)
+            details = tool.description + "\n\n" + json.dumps(args, ensure_ascii=False, indent=2)
             if name == "close_application":
                 details += "\nCerrar termina el proceso y puede perder cambios sin guardar."
             if name in ("mouse_click", "type_text", "press_keys", "move_mouse"):
@@ -63,18 +70,26 @@ class ToolRegistry:
             self.security.confirm(name, details, risk, self.cancel)
             check_cancel(self.cancel)
             self.emit("status", "Ejecutando " + name)
+            self.security.validate_origin()
             result = tool.function(**args)
             self.log.info("tool=%s result=success seconds=%.2f", name, time.monotonic()-start)
             return {"ok": True, "result": result}
         except Cancelled:
             raise
-        except jsonschema.ValidationError:
+        except jsonschema.ValidationError as exc:
             result = "Argumentos inválidos para la herramienta. No se ejecutó la acción."
+            self.log.info("tool=%s result=schema_error", name)
+            if notify_validation:
+                self.emit("notice", result)
+            return {"ok": False, "error": result, "error_code": "schema_validation",
+                    "schema_error": exc.message[:1500], "expected_schema": tool.schema if tool else {}}
         except ImportError as exc:
             self.log.warning("tool=%s missing_dependency=%s", name, exc.name)
             result = f"Función no disponible: falta {exc.name}. Repite instalar.bat o consulta el README."
         except VictorError as exc:
             result = str(exc)
+            if getattr(exc, "fallback", None) == "spotify":
+                return {"ok": False, "error": result, "fallback": "spotify"}
         except FileExistsError:
             result = "El destino ya existe. No se sobrescribió. Elige otro nombre."
         except FileNotFoundError:

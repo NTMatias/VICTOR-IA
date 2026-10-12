@@ -14,18 +14,23 @@ KEYS = {"OpenAI": "OPENAI_API_KEY", "Anthropic": "ANTHROPIC_API_KEY", "Gemini": 
 DEFAULTS = {
     "provider": "OpenAI",
     "models": {"OpenAI": "gpt-4.1-mini", "Anthropic": "claude-sonnet-4-20250514",
-               "Gemini": "gemini-2.5-flash", "Ollama": "llama3.2"},
+               "Gemini": "gemini-2.5-flash", "Ollama": "qwen2.5:7b"},
     "fallback": [], "temperature": 0.5, "max_tokens": 2048,
     "name": "VICTOR.IA", "personality": "Atento, preciso, práctico y con humor discreto.",
     "formality": "Profesional y cercano", "language": "es-EC",
     "system_prompt": "Responde con concisión salvo que el usuario pida detalle.",
     "theme": "Dark", "security": "normal", "voice_enabled": False,
     "voice_id": "", "voice_rate": 175, "voice_mode": "manual",
-    "voice_backend": "google", "whisper_model": "base", "wake_word": "VICTOR",
+    "voice_backend": "whisper", "whisper_model": "base", "wake_word": "VICTOR",
     "microphone": "", "vision_provider": "OpenAI", "vision_model": "gpt-4.1-mini",
     "ollama_url": "http://127.0.0.1:11434", "context_chars": 24000,
     "allowed_folders": [str(ROOT / "workspace")], "applications": {},
     "auto_search": True, "network_timeout": 30,
+    "ollama_light": False, "ollama_keep_alive": "5m", "ollama_timeout": 180,
+    "ollama_gpu": "auto", "ollama_context": 4096,
+    "tts_backend": "edge", "edge_voice": "es-EC-LuisNeural", "conversation_window": 45,
+    "telegram_enabled": False, "telegram_allowed_ids": [], "telegram_paused": False,
+    "remote_block_all": False, "remote_high_policy": "block", "remote_rate_limit": 6,
 }
 
 
@@ -87,6 +92,26 @@ class ConfigManager:
         for k in ("auto_search", "voice_enabled"):
             if not isinstance(d[k], bool):
                 raise VictorError(f"{k} debe ser verdadero o falso.")
+        if not isinstance(d["ollama_light"], bool) or d["ollama_gpu"] not in ("auto", "cpu"):
+            raise VictorError("Perfil Ollama inválido.")
+        if d["tts_backend"] not in ("edge", "sapi") or not isinstance(d["edge_voice"], str):
+            raise VictorError("Configuración de salida de voz inválida.")
+        for key in ("telegram_enabled", "telegram_paused", "remote_block_all"):
+            if not isinstance(d[key], bool):
+                raise VictorError("Configuración remota inválida.")
+        if not isinstance(d["telegram_allowed_ids"], list) or any(type(i) is not int or i <= 0 for i in d["telegram_allowed_ids"]):
+            raise VictorError("Los IDs de Telegram deben ser enteros positivos en una lista JSON.")
+        if d["remote_high_policy"] not in ("block", "pc") or type(d["remote_rate_limit"]) is not int or not 1 <= d["remote_rate_limit"] <= 20:
+            raise VictorError("Política o límite remoto inválidos.")
+        if not isinstance(d["conversation_window"], int) or not 0 <= d["conversation_window"] <= 180:
+            raise VictorError("La ventana de conversación debe estar entre 0 y 180 segundos.")
+        if not isinstance(d["ollama_timeout"], int) or not 30 <= d["ollama_timeout"] <= 600:
+            raise VictorError("Timeout Ollama: entre 30 y 600 segundos.")
+        if not isinstance(d["ollama_context"], int) or not 2048 <= d["ollama_context"] <= 16384:
+            raise VictorError("Contexto Ollama: entre 2048 y 16384 tokens.")
+        import re
+        if not isinstance(d["ollama_keep_alive"], str) or not re.fullmatch(r"\d{1,3}[smh]", d["ollama_keep_alive"]):
+            raise VictorError("keep_alive debe ser una duración, por ejemplo 5m.")
         from urllib.parse import urlparse
         url = urlparse(d["ollama_url"])
         if url.scheme != "http" or url.hostname not in ("127.0.0.1", "localhost", "::1") or url.username or url.query:

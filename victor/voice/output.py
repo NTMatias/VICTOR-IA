@@ -65,7 +65,8 @@ class VoiceOutput:
                         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                         text=True, encoding="utf-8", creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
                     process = self.process
-                payload = {"text": text, "rate": cfg["voice_rate"], "voice_id": cfg["voice_id"], "language": cfg["language"]}
+                payload = {"text": text, "rate": cfg["voice_rate"], "voice_id": cfg["voice_id"], "language": cfg["language"],
+                           "backend": cfg["tts_backend"], "edge_voice": cfg["edge_voice"]}
                 process.communicate(json.dumps(payload, ensure_ascii=False), timeout=180)
                 if process.returncode and not self.closing.is_set() and epoch == self.epoch:
                     self.emit("error", "La síntesis de voz no pudo completarse. Revisa pyttsx3 y las voces de Windows.")
@@ -83,9 +84,8 @@ class VoiceOutput:
                 self.emit("speech_status", "Voz en espera")
 
 
-def speak_worker():
+def speak_sapi(payload):
     import pyttsx3
-    payload = json.loads(sys.stdin.read())
     engine = pyttsx3.init("sapi5" if os.name == "nt" else None)
     engine.setProperty("rate", payload["rate"])
     if payload.get("voice_id"):
@@ -100,3 +100,42 @@ def speak_worker():
     engine.say(payload["text"])
     engine.runAndWait()
     engine.stop()
+
+
+def speak_worker():
+    payload = json.loads(sys.stdin.read())
+    if payload.get("backend") == "edge":
+        try:
+            import asyncio
+            import tempfile
+            from pathlib import Path
+            import edge_tts
+            from PySide6.QtCore import QUrl, QTimer
+            from PySide6.QtWidgets import QApplication
+            from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+            async def synthesize(path):
+                await asyncio.wait_for(edge_tts.Communicate(payload["text"], payload["edge_voice"], connect_timeout=8, receive_timeout=20).save(str(path)), timeout=40)
+            with tempfile.TemporaryDirectory(prefix="victor-tts-") as folder:
+                path = Path(folder) / "speech.mp3"
+                asyncio.run(synthesize(path))
+                app = QApplication([])
+                player, output = QMediaPlayer(), QAudioOutput()
+                player.setAudioOutput(output)
+                failed = []
+                def on_error(*args):
+                    failed.append(True)
+                    app.quit()
+                player.errorOccurred.connect(on_error)
+                player.mediaStatusChanged.connect(lambda status: app.quit() if status == QMediaPlayer.MediaStatus.EndOfMedia else None)
+                player.setSource(QUrl.fromLocalFile(str(path)))
+                QTimer.singleShot(150000, on_error)
+                player.play()
+                app.exec()
+                player.stop()
+                if failed:
+                    raise RuntimeError("No audio output")
+            return
+        except Exception:
+            # Respaldo real SAPI; errores de ambos se contienen en el proceso padre.
+            pass
+    speak_sapi(payload)

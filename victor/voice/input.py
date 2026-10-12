@@ -4,6 +4,7 @@ import threading
 import time
 from victor.errors import VictorError
 from victor.voice.wakeword import extract_command
+from victor.voice.transcription import Transcriber
 
 
 class VoiceInput:
@@ -15,6 +16,8 @@ class VoiceInput:
         self.thread = None
         self.model = None
         self.model_name = None
+        self.transcriber = Transcriber(config)
+        self.conversation_until = 0
 
     @property
     def running(self):
@@ -25,6 +28,7 @@ class VoiceInput:
             return
         self.stop_event.clear()
         self.release_event.clear()
+        self.conversation_until = 0
         self.thread = threading.Thread(target=self._run, name="victor-microphone", daemon=True)
         self.thread.start()
 
@@ -38,6 +42,9 @@ class VoiceInput:
         import sounddevice as sd
         import numpy as np
         import speech_recognition as sr
+        devices = sd.query_devices()
+        if not any(device["max_input_channels"] > 0 for device in devices):
+            raise VictorError("No hay micrófono disponible. Puedes usar el celular enviando notas de voz por Telegram tras emparejarlo en el PC.")
         frames = queue.Queue(maxsize=150)
         samples = []
         def callback(data, count, timing, status):
@@ -70,20 +77,7 @@ class VoiceInput:
         pcm = np.concatenate(samples).flatten()
         self.emit("voice_status", "Transcribiendo…")
         if cfg["voice_backend"] == "whisper":
-            try:
-                from faster_whisper import WhisperModel
-            except ImportError:
-                raise VictorError("faster-whisper es opcional. Instálalo con .venv\\Scripts\\python -m pip install faster-whisper o selecciona Google.") from None
-            if self.model_name != cfg["whisper_model"]:
-                self.model = WhisperModel(cfg["whisper_model"], device="cpu", compute_type="int8", local_files_only=True)
-                self.model_name = cfg["whisper_model"]
-            segments, info = self.model.transcribe(pcm.astype(np.float32)/32768.0, language=cfg["language"].split("-")[0], beam_size=1)
-            words = []
-            for segment in segments:
-                if self.stop_event.is_set():
-                    return ""
-                words.append(segment.text)
-            return " ".join(words).strip()
+            return self.transcriber.transcribe(pcm.astype(np.float32)/32768.0, self.stop_event)
         recognizer = sr.Recognizer()
         recognizer.operation_timeout = 10
         try:
@@ -98,6 +92,8 @@ class VoiceInput:
         try:
             while not self.stop_event.is_set():
                 if not self.can_listen():
+                    if self.conversation_until:
+                        self.conversation_until = time.monotonic() + self.config.get("conversation_window")
                     if self.stop_event.wait(0.2):
                         break
                     continue
@@ -106,8 +102,9 @@ class VoiceInput:
                 if self.stop_event.is_set():
                     break
                 if text:
-                    command = extract_command(text, self.config.get("wake_word"), required=continuous)
+                    command = extract_command(text, self.config.get("wake_word"), required=continuous and time.monotonic() > self.conversation_until)
                     if command:
+                        self.conversation_until = time.monotonic() + self.config.get("conversation_window")
                         self.emit("voice_text", command)
                 if not continuous:
                     break

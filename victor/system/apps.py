@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 import webbrowser
+import time
 from pathlib import Path
 from victor.errors import VictorError
 
@@ -25,6 +26,9 @@ class ApplicationManager:
                     "explorador": win / "explorer.exe", "paint": win / "System32/mspaint.exe"}
         aliases = {k.casefold(): v for k, v in self.config.get("applications").items()}
         path = aliases.get(key) or builtins.get(key)
+        if not path and key == "spotify":
+            candidate = Path(os.environ.get("APPDATA", "C:/__missing__")) / "Spotify/Spotify.exe"
+            path = candidate if candidate.is_file() else None
         if not path and key in ("chrome", "google chrome", "edge", "microsoft edge", "firefox"):
             relative = {"chrome": "Google/Chrome/Application/chrome.exe", "google chrome": "Google/Chrome/Application/chrome.exe",
                         "edge": "Microsoft/Edge/Application/msedge.exe", "microsoft edge": "Microsoft/Edge/Application/msedge.exe",
@@ -42,7 +46,25 @@ class ApplicationManager:
         path = self.resolve(name)
         process = subprocess.Popen([path], shell=False)
         self.launched[process.pid] = path
-        return {"solicitud_apertura": name, "pid": process.pid}
+        result = {"solicitud_apertura": name, "pid": process.pid}
+        if Path(path).stem.casefold() == "calc":
+            try:
+                import pygetwindow
+                import psutil
+                deadline = time.monotonic() + 3
+                windows = []
+                while time.monotonic() < deadline:
+                    windows = [w for w in pygetwindow.getAllWindows() if w.title.casefold() in ("calculadora", "calculator") and w.visible]
+                    if windows:
+                        break
+                    time.sleep(.2)
+                processes = [p.info for p in psutil.process_iter(["pid", "name"]) if (p.info["name"] or "").casefold() in ("calculator.exe", "calculatorapp.exe", "calc.exe")]
+                result.update(ventana_visible=bool(windows), procesos=processes)
+                if not windows:
+                    result["aviso"] = "Windows recibió la solicitud, pero no pude confirmar una ventana visible de Calculadora."
+            except Exception:
+                result["aviso"] = "Solicitud enviada; no se pudo verificar la ventana de Calculadora."
+        return result
 
     def close_application(self, name):
         import psutil

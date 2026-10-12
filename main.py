@@ -20,42 +20,36 @@ def main():
         from victor.config import ConfigManager
         from victor.logger import setup_logging
         from victor.gui.app import GUIManager
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtCore import QTimer
         config = ConfigManager()
         log = setup_logging(config.data_dir)
         log.info("startup Python=%s", sys.version.split()[0])
+        qt = QApplication.instance() or QApplication(sys.argv[:1])
         app = GUIManager(config)
+        app.show()
         if args.smoke_test:
             def verify_window():
-                result = {"window_open": bool(app.winfo_viewable()), "geometry": app.geometry(),
-                          "title": app.title(), "tools": len(app.core.registry.tools), "python": sys.version}
+                result = {"window_open": app.isVisible(), "geometry": [app.width(), app.height()],
+                          "title": app.windowTitle(), "tools": len(app.core.registry.tools), "python": sys.version}
                 try:
-                    import mss
-                    import mss.tools
-                    with mss.mss() as sct:
-                        region = {"left": app.winfo_rootx(), "top": app.winfo_rooty(), "width": app.winfo_width(), "height": app.winfo_height()}
-                        shot = sct.grab(region)
-                        mss.tools.to_png(shot.rgb, shot.size, output=str(Path(args.smoke_test).with_suffix(".png")))
+                    if not app.grab().save(str(Path(args.smoke_test).with_suffix(".png"))):
+                        raise RuntimeError("Qt no pudo guardar la captura del widget.")
                     result["screenshot"] = str(Path(args.smoke_test).with_suffix(".png"))
                 except Exception as exc:
                     result["screenshot_error"] = type(exc).__name__ + ": " + str(exc)
-                    try:
-                        from PIL import ImageGrab
-                        box = (app.winfo_rootx(), app.winfo_rooty(), app.winfo_rootx()+app.winfo_width(), app.winfo_rooty()+app.winfo_height())
-                        ImageGrab.grab(bbox=box).save(Path(args.smoke_test).with_suffix(".png"))
-                        result["screenshot_fallback"] = "Pillow ImageGrab"
-                    except Exception as fallback_error:
-                        result["screenshot_fallback_error"] = str(fallback_error)
                 Path(args.smoke_test).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
                 app.close()
-            app.after(1800, verify_window)
-        app.mainloop()
+            QTimer.singleShot(2400, verify_window)
+        qt.exec()
         log.info("shutdown")
     except ImportError as exc:
         message = f"Falta una dependencia: {exc.name}. Ejecuta instalar.bat y después iniciar.bat."
         print(message)
         try:
-            import tkinter.messagebox
-            tkinter.messagebox.showerror("VICTOR.IA", message)
+            from PySide6.QtWidgets import QApplication, QMessageBox
+            qt = QApplication.instance() or QApplication([])
+            QMessageBox.critical(None, "VICTOR.IA", message)
         except Exception:
             pass
         raise SystemExit(1)

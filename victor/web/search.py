@@ -62,9 +62,8 @@ class WebSearchManager:
         if cached and time.monotonic() - cached[0] < 300:
             return cached[1]
         try:
-            from duckduckgo_search import DDGS
-            with DDGS(timeout=10) as client:
-                rows = list(client.text(query, max_results=5))
+            from ddgs import DDGS
+            rows = list(DDGS(timeout=10).text(query, max_results=5))
         except Exception:
             raise VictorError("No pude conectarme al servicio de búsqueda. Comprueba tu conexión o inténtalo más tarde.") from None
         if not rows:

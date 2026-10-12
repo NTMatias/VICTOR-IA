@@ -1,4 +1,46 @@
+# Verificación de VICTOR.IA v2 — 24/09/2026
+
+Entorno: Windows, Python 3.12.14 de 64 bits. Se trabajó sobre el proyecto existente; se conservaron las 36 pruebas originales. No se reinstalaron dependencias existentes: solo se incorporaron las nuevas mediante wheels oficiales.
+
+## Resultado final v2
+
+- `python -m compileall -q main.py victor tests`: aprobado.
+- `python -m unittest discover -s tests -v`: **59 pruebas aprobadas**, 11,807 segundos. Incluye las 36 originales. Los errores impresos por tests de captura son fallos simulados esperados y contenidos.
+- `pip check`: sin dependencias rotas. Imports reales de todos los módulos y de faster-whisper, edge-tts, python-telegram-bot y spotipy: aprobados.
+- Ventana real PySide6 abierta/cerrada; ancho de 420 px, RAM real desde chat, panel lateral, guardado y confirmación EJECUTAR comprobados. Los trabajadores terminaron. Smoke de main.py y captura del widget revisada durante bloque 2; no se repitió sin necesidad.
+- Bloque 6: diez pruebas con servicios simulados aprobadas. Rutas Google, Spotify DTMF, volumen 30 y visión; emparejamiento de un uso, expiración, rate limit, pausa, allowlist, texto/nota de voz al mismo flujo, confirmación ligada al remitente, rechazo de alto riesgo remoto, autorización en PC y revocación durante espera. Spotify contrasta pista solicitada con estado devuelto. Ningún bot/cuenta real fue contactado en estos tests.
+- Búsqueda ddgs real: cuatro fuentes HTML leídas. Lectura real de volumen mediante pycaw/comtypes: correcta; no se cambió el volumen del usuario.
+
+## No verificado con servicio real / limitaciones
+
+- **Telegram y Spotify: no verificado con servicio real.** Configura tus credenciales y prueba emparejamiento, audio, OAuth, reproducción y entrega de captura. OAuth DPAPI está implementado pero no se ha completado con una cuenta real.
+- Sin llamadas reales a OpenAI, Anthropic, Gemini ni inferencia Ollama. Adaptadores y fallback se probaron con respuestas simuladas.
+- Whisper, micrófono, wake word hablada y salida audible edge/SAPI no verificados de extremo a extremo. No se descargaron modelos ni se grabó audio personal.
+- MSS e ImageGrab no pudieron capturar el escritorio de este entorno. El respaldo y errores se probaron con mocks; la captura del widget Qt sí funcionó. No se analizó una pantalla real con IA.
+- Calculadora aceptó el lanzamiento, pero no se pudo confirmar una ventana/proceso persistente. El resultado ahora lo advierte. No se declara resuelto el bloqueo del entorno.
+- No se enviaron clics/teclas a aplicaciones personales ni se modificó su volumen.
+- No se volvió a ejecutar instalar.bat ni reinstalar dependencias ya comprobadas. El script incorpora nuevas dependencias opcionales; la instalación limpia online completa con pip sigue pendiente de verificación. Se comprobaron los imports y coherencia del entorno resultante.
+- Google OAuth y remoto web/QR/HTTPS móvil quedaron diferidos por ser opcionales. No hay implementaciones vacías ni controles que aparenten esas funciones.
+
+## Evidencia anterior por bloques y v1 (histórica)
+
+El registro siguiente conserva lo realizado antes. Las referencias a CustomTkinter, Tcl y 36 pruebas describen v1, no la interfaz entregada en v2. Las limitaciones de búsqueda de v1 se superaron con ddgs; las capturas de escritorio siguen bloqueadas.
+
 # Verificación de la entrega
+
+## Evolución v2 (24 de septiembre de 2026)
+
+Bloque 1 cerrado: 42 pruebas aprobadas (las 36 originales más seis nuevas). Se verificaron normalización de argumentos, devolución del esquema sin error técnico en GUI, límite de un reintento, alias locales, órdenes de volumen/web y preflight Ollama con HTTP simulado. ddgs 9.16 se instaló y realizó una búsqueda real: cuatro fuentes HTML obtenidas y leídas correctamente. Persistió un aviso del almacén de certificados del entorno, pero la operación finalizó. No se probó inferencia Ollama real ni GPU física; sus comprobaciones automáticas tienen timeout y error comprensible.
+
+La evidencia siguiente pertenece a **v1** y no certifica por sí misma la nueva GUI ni las integraciones v2.
+
+Bloque 2 cerrado: instalada únicamente la dependencia nueva PySide6 6.11.2 y sus componentes. Prueba Qt aprobada: ventana a 420 px, respuesta RAM real, panel lateral, guardado, confirmación alta y trabajadores cerrados. Smoke test real de main.py aprobado sin ajuste Tcl/Tk. Captura del widget Qt generada y revisada visualmente (940 × 880); esto no equivale a capturar el escritorio externo. Las métricas CPU/RAM/red mostradas son medidas reales. No se muestra tarjeta proactiva porque no hay una integración conectada que suministre datos.
+
+Bloque 3 cerrado: cuatro pruebas aprobadas para valores predeterminados locales, ausencia de micrófono, seguimiento de órdenes sin nueva wake word y parámetros Whisper CPU/int8/local_files_only. Whisper se simuló en tests; no se descargaron modelos ni se grabó audio del usuario. edge-tts y su reproducción/respaldos necesitan verificación real; son opcionales y no intervienen en el arranque.
+
+Bloque 4 cerrado: dos pruebas aprobadas para respaldo ImageGrab y error comprensible cuando fallan ambos capturadores. En comprobación real MSS e ImageGrab continuaron bloqueados por el entorno. pycaw/comtypes leyeron correctamente el volumen (sin modificarlo). La calculadora aceptó el lanzamiento, pero no apareció ventana ni proceso persistente verificable; ahora el resultado de la herramienta lo informa explícitamente. No se repitieron intentos sin cambios.
+
+Bloque 5 opcional diferido: Google OAuth y control remoto web/QR no están implementados ni se anuncian como disponibles. La vía móvil de esta entrega será Telegram. Spotify se cubre en el bloque 6 obligatorio.
 
 Entorno: Windows, CPython 3.12.14 de 64 bits. Verificación realizada durante la preparación del proyecto, 23–24 de septiembre de 2026.
 
