@@ -1,0 +1,39 @@
+"""Vista móvil única. Los comandos mantienen las confirmaciones del servidor."""
+PAGE = r'''<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VICTOR · Escritorio local</title><style>
+*{box-sizing:border-box}body{background:#0d111c;color:#edf2ff;font:15px system-ui;margin:16px}h1{font-weight:800;font-size:25px}button,input{font:inherit;padding:12px;border-radius:14px;border:1px solid #29344a;background:#222b3b;color:inherit}button{touch-action:manipulation}input{width:100%;margin:6px 0}small{color:#9ba9c3}#screenBox{height:60vh;min-height:200px;display:flex;align-items:center;justify-content:center;border-radius:24px;background:#171e2e;overflow:hidden;margin:12px 0}#view{display:block;width:100%;height:100%;object-fit:contain;touch-action:none}#keyboardBox[hidden]{display:none}.controls{display:flex;flex-wrap:wrap;gap:8px}#status{min-height:40px}#modifiers input{width:auto}</style>
+<h1>VICTOR · Tu escritorio</h1><small>● Red local · acciones supervisadas desde el PC</small>
+<p id="status">Conectando…</p><input id="window" placeholder="Título exacto de la ventana que quieres controlar" aria-label="Ventana destino">
+<div id="screenBox"><img id="view" alt="Autoriza compartir pantalla en el PC para ver el escritorio"></div>
+<div class="controls"><button id="keyboard">⌨ Teclado</button><button id="screen">🖥 Renovar pantalla · 60 s</button><button id="stop">Detener</button></div>
+<section id="keyboardBox" hidden><input id="typing" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Escribe aquí; confirma la entrada en el PC">
+<div id="modifiers"><label><input type="checkbox" id="ctrl">Ctrl</label><label><input type="checkbox" id="alt">Alt</label><label><input type="checkbox" id="shift">Shift</label></div>
+<div class="controls"><button data-key="enter">Intro</button><button data-key="esc">Escape</button><button data-key="backspace">Retroceso</button><button data-key="tab">Tab</button></div></section>
+<p>Un dedo: mover y hacer clic. Dos dedos: scroll. Confirma cada acción en el PC. El texto se agrupa y espera EJECUTAR.</p>
+<script>
+'use strict';
+const status=document.getElementById('status'),target=document.getElementById('window'),view=document.getElementById('view'),typing=document.getElementById('typing');
+let ws,video,session='',pending=false,frame=null,imageURL='',imageTime=0,metadata=null,lastScroll=0,composition=false,typingTimer,buffer='',queue=[],running=true;
+const points=new Map();let gesture=null;
+const code=location.hash.slice(1);history.replaceState(null,'',location.pathname);
+function connect(path,auth){return new Promise((resolve,reject)=>{const s=new WebSocket('wss://'+location.host+path);s.onopen=()=>s.send(JSON.stringify(auth));s.onerror=()=>reject(Error('No se pudo conectar. Revisa HTTPS y Wi-Fi.'));s.onmessage=e=>{const msg=JSON.parse(e.data);if(msg.error){s.close();reject(Error(msg.error))}else resolve([s,msg]);};});}
+function send(tool,args){if(!running||!ws||ws.readyState!==1)return false;if(pending){status.textContent='Hay una acción esperando confirmación en el PC.';return false;}pending=true;ws.send(JSON.stringify({tool,args}));status.textContent='Confirma en el PC para ejecutar.';return true;}
+function pump(){if(!pending&&queue.length){const item=queue.shift();if(!send(item.tool,item.args))queue.unshift(item)}}
+function enqueue(tool,args){if(queue.length>=8){status.textContent='Cola llena. Confirma o cancela las acciones pendientes.';return false;}queue.push({tool,args});pump();return true;}
+function locationOnImage(clientX,clientY){if(!frame||!frame.width||!frame.height)return null;const rect=view.getBoundingClientRect(),scale=Math.min(rect.width/frame.width,rect.height/frame.height),w=frame.width*scale,h=frame.height*scale,left=rect.left+(rect.width-w)/2,top=rect.top+(rect.height-h)/2;const x=(clientX-left)/w,y=(clientY-top)/h;if(x<0||x>1||y<0||y>1)return null;return{x,y};}
+function touch(clientX,clientY,action){const p=locationOnImage(clientX,clientY);if(!p||!target.value||Date.now()-imageTime>3000){status.textContent='Indica una ventana y espera una imagen actual.';return;}send('remote_touch',{window:target.value,x:p.x,y:p.y,frame_id:frame.id,action});}
+view.onpointerdown=e=>{points.set(e.pointerId,[e.clientX,e.clientY]);view.setPointerCapture(e.pointerId);if(points.size===1)gesture={scroll:false,scrollY:e.clientY};if(points.size>=2&&gesture)gesture.scroll=true;};
+view.onpointermove=e=>{if(!points.has(e.pointerId))return;points.set(e.pointerId,[e.clientX,e.clientY]);if(gesture&&gesture.scroll&&points.size>=2){const values=[...points.values()],y=(values[0][1]+values[1][1])/2;if(Math.abs(y-gesture.scrollY)>20&&Date.now()-lastScroll>600){touch(values[0][0],values[0][1],y<gesture.scrollY?'down':'up');lastScroll=Date.now();gesture.scrollY=y;}}};
+view.onpointerup=e=>{if(gesture&&!gesture.scroll)touch(e.clientX,e.clientY,'click');points.delete(e.pointerId);if(!points.size)gesture=null;};view.onpointercancel=e=>{points.delete(e.pointerId);gesture=null;};
+document.getElementById('keyboard').onclick=()=>{document.getElementById('keyboardBox').hidden=false;typing.focus();};
+function flushTyping(){if(composition||!buffer)return;if(enqueue('type_text',{window:target.value,text:buffer.slice(0,2000)})){buffer=buffer.slice(2000);typing.value=buffer;}}
+typing.oncompositionstart=()=>composition=true;typing.oncompositionend=()=>{composition=false;buffer=typing.value;clearTimeout(typingTimer);typingTimer=setTimeout(flushTyping,450);};
+typing.oninput=()=>{buffer=typing.value;if(!composition){clearTimeout(typingTimer);typingTimer=setTimeout(flushTyping,450);}};
+typing.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();flushTyping();enqueue('press_keys',{window:target.value,keys:['enter']});}else if(e.key==='Backspace'&&!typing.value){e.preventDefault();enqueue('press_keys',{window:target.value,keys:['backspace']});}};
+typing.addEventListener('beforeinput',e=>{if(composition)return;if(e.inputType==='deleteContentBackward'&&!typing.value){e.preventDefault();enqueue('press_keys',{window:target.value,keys:['backspace']});}else if(e.inputType==='insertLineBreak'){e.preventDefault();flushTyping();enqueue('press_keys',{window:target.value,keys:['enter']});}});
+document.querySelectorAll('[data-key]').forEach(b=>b.onclick=()=>{flushTyping();const keys=['ctrl','alt','shift'].filter(k=>document.getElementById(k).checked);keys.push(b.dataset.key);enqueue('press_keys',{window:target.value,keys});});
+document.getElementById('screen').onclick=()=>send('remote_screen_stream',{});
+document.getElementById('stop').onclick=()=>{running=false;queue=[];buffer='';if(ws)ws.close();if(video)video.close();status.textContent='Sesión detenida';};
+setInterval(()=>{if(imageTime&&Date.now()-imageTime>3000){view.style.opacity='.45';status.textContent=pending?'Esperando confirmación en el PC.':'Imagen sin actualizar. Renueva la pantalla.'}},1000);
+(async()=>{try{[ws,{session}]=await connect('/control',{code});status.textContent='Conectado. Indica la ventana destino.';ws.onmessage=e=>{const m=JSON.parse(e.data);status.textContent=m.message||m.error||'Listo';if(m.done){pending=false;setTimeout(pump,500)}};ws.onclose=()=>{pending=false;queue=[];running=false;status.textContent='Sesión cerrada. Genera otro QR en el PC.'};[video]=await connect('/screen',{session});video.binaryType='blob';video.onmessage=e=>{if(e.data instanceof Blob){if(imageURL)URL.revokeObjectURL(imageURL);imageURL=URL.createObjectURL(e.data);frame=metadata;view.src=imageURL;imageTime=Date.now();view.style.opacity='1'}else{const m=JSON.parse(e.data);if(m.frame)metadata=m.frame;else status.textContent=m.error||'Pantalla detenida'}};send('remote_screen_stream',{});}catch(e){status.textContent=e.message}})();
+</script></html>'''

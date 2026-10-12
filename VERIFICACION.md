@@ -1,3 +1,31 @@
+# Verificación v4 — 25/09/2026
+
+## Comprobado en este turno
+
+- `python -m compileall -q main.py victor tests`: aprobado.
+- Suite completa: **76 pruebas aprobadas**, 18,929 segundos. Incluye las 36 originales, todas las de v2/v3 y ocho nuevas de v4. Se corrigió un nombre de clase equivocado en el nuevo test (Reply); no fue un fallo de la aplicación.
+- GUI real abierta/cerrada, revisión visual de cinco capturas propias incluidas, panel sin Tools, estilos, nombres legibles y tarjeta sin JSON, mini reproductor con ejemplo rotulado y vista de voz. Trabajadores cerrados correctamente.
+- Cobertura comprobada de nombres amigables para todas las herramientas registradas; detalles de correo conservan destinatario y cuerpo completo. Spotify volumen es bajo; play/pausa/anterior/siguiente mantienen riesgo. Las pruebas no reprodujeron música de una cuenta real.
+- Confirmación de voz probada con transcripciones simuladas y solicitud local activada: una frase sin esa vinculación no autoriza una acción. No se grabó de nuevo micrófono ni se descargaron modelos: no se repitió el trabajo anterior.
+- Telegram probado con IA simulada: una frase libre llega al mismo generador; sin clave se emite error comprensible. Se probó la extracción del primer video con HTML de prueba. No se contactó un bot real ni se abrió/reprodujo un video real.
+- Mapeo remoto probado con coordenadas negativas y rechazo de frames caducados; protocolo HTTPS/WebSocket conserva las pruebas anteriores. JavaScript pasó `node --check`; una prueba JS adicional verificó proporción de pantalla y bandas vacías. No se enviaron pulsaciones ni clics a aplicaciones personales.
+- Comparación exacta con el ZIP v3: **google.py, spotify.py, core.py y security.py idénticos byte a byte**. Los flujos de autorización no se tocaron. El usuario informa que Google y Spotify ya funcionan con su cuenta real; se conserva esa verificación aportada por el usuario, sin atribuirla a una prueba nueva del agente.
+- No se instalaron, reinstalaron ni cambiaron dependencias en este turno.
+
+## Qué sigue sin comprobarse de extremo a extremo
+
+En la carpeta y entorno accesibles al agente no hay token Google/Spotify, ID de cliente Spotify, token Telegram ni claves de IA. Esto no contradice que el usuario tenga otra instalación ya autorizada. Por ello el mini reproductor se capturó con datos de ejemplo visibles y no se volvió a abrir OAuth ni a reautorizar cuentas.
+
+Pendientes: estado/carátula/controles Spotify reales, reconocimiento hablado de confirmaciones (incluida alta), frases libres con IA real y Telegram, reproducción del primer video y móvil real con tacto/teclado nativo/streaming. Las restricciones de captura del escritorio y micrófono/modelo documentadas en v3 no se declaran resueltas ni se repitieron sin necesidad.
+
+La voz afirmativa solo autoriza después de activar su escucha explícitamente en el PC. El teclado móvil está sujeto a EJECUTAR: no promete escritura instantánea sin confirmación. No se midió latencia real del remoto en Wi-Fi.
+
+## Alcance de cambios
+
+Se retiró únicamente la UI manual de herramientas. Se añadieron módulos de presentación, mini reproductor, vista de voz y adaptadores de YouTube/tacto. El receptor de voz incorpora contexto de confirmación y el streaming añade metadatos de geometría; la autorización, orquestación y OAuth existentes se mantienen. Ningún dato de ejemplo se inyecta en la aplicación de producción.
+
+## Evidencia anterior (histórica)
+
 # Verificación v3 — resultados de este turno
 
 ## Parte A: interfaz real

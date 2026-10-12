@@ -3,21 +3,26 @@ import json
 import logging
 import queue
 import threading
+import time
 from datetime import datetime
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QPoint, QEasingCurve
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QLabel, QPushButton, QVBoxLayout,
     QHBoxLayout, QBoxLayout, QGridLayout, QScrollArea, QTabWidget, QListWidget, QListWidgetItem, QLineEdit, QPlainTextEdit, QComboBox, QMessageBox)
 from victor.core import VictorCore
-from victor.gui.theme import STYLE, LABEL_STYLES, state_style
+from victor.gui.theme import STYLE, LABEL_STYLES, state_style, title_font
 from victor.gui.widgets import Bubble, MessageRow, Composer, ListeningWave, ApprovalCard, ApprovalDialog
-from victor.gui.panels import SettingsManager, example_args
+from victor.gui.panels import SettingsManager
 from victor.gui.metrics import MetricsWorker
 from victor.voice.input import VoiceInput
 from victor.voice.output import VoiceOutput
 from victor.security import Risk
+from victor.gui.tool_labels import readable_names, friendly_name, confirmation_details
 from victor.integrations.telegram_bot import TelegramService
 from victor.integrations.local_remote import LocalRemote
+from victor.gui.spotify_player import SpotifyMiniPlayer, SpotifyPoller, register_player
+from victor.gui.voice_panel import VoicePanel
+from victor.gui.widgets import display_text
 
 
 class GUIManager(QMainWindow):
@@ -26,8 +31,15 @@ class GUIManager(QMainWindow):
         self.config = config
         self.events = queue.Queue()
         self.core = VictorCore(config, self.emit)
+        register_player(self.core)
+        from victor.plugins.video import register_video
+        register_video(self.core)
+        self.confirmation_target = None
+        self.voice_view = False
         self.voice_output = VoiceOutput(config, self.emit)
-        self.voice_input = VoiceInput(config, self.emit, lambda: not self.core.busy.is_set() and not self.voice_output.speaking.is_set())
+        self.voice_input = VoiceInput(config, self.emit, lambda: (not self.core.busy.is_set() or self.voice_confirmation_active()) and not self.voice_output.speaking.is_set())
+        self.voice_input.confirmation_pending = self.voice_confirmation_active
+        self.voice_input.confirmation_context = lambda: self.confirmation_target if self.voice_confirmation_active() else None
         self.telegram = TelegramService(config, self.core, self.voice_input.transcriber, self.emit)
         self.local_remote = LocalRemote(config, self.core, self.emit)
         self.active_remote = None
@@ -46,6 +58,9 @@ class GUIManager(QMainWindow):
         self.setFont(QFont("Segoe UI Variable", 10))
         self.setStyleSheet(STYLE)
         self.build()
+        self.player = SpotifyMiniPlayer(self)
+        self.spotify_poller = SpotifyPoller(self.core, self.emit)
+        self.spotify_poller.thread.start()
         self.set_state("Listo")
         rows = self.core.history.list()
         self.conversation_id = rows[0]["id"] if rows else self.core.history.create()
@@ -88,9 +103,14 @@ class GUIManager(QMainWindow):
         small = QLabel(greeting + "  ·  VICTOR.IA")
         small.setStyleSheet(LABEL_STYLES["muted"])
         title = QLabel("¿En qué te ayudo?")
+        title.setFont(title_font())
         title.setStyleSheet(LABEL_STYLES["heading"])
         greetings.addWidget(small)
         greetings.addWidget(title)
+        subtitle = QLabel("Tu asistente, a una palabra de distancia.")
+        subtitle.setWordWrap(True)
+        subtitle.setStyleSheet(LABEL_STYLES["muted"])
+        greetings.addWidget(subtitle)
         header.addLayout(greetings, 1)
         self.menu = self.button("☰", lambda: self.toggle_drawer())
         header.addWidget(self.menu)
@@ -140,6 +160,9 @@ class GUIManager(QMainWindow):
         self.chat_layout.setSpacing(12)
         self.chat_scroll.setWidget(self.chat_body)
         layout.addWidget(self.chat_scroll, 1)
+        self.voice_panel = VoicePanel(self)
+        self.voice_panel.hide()
+        layout.addWidget(self.voice_panel, 1)
         self.listen_text = QLabel("Micrófono apagado")
         self.listen_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.listen_text.setStyleSheet(LABEL_STYLES["muted"])
@@ -214,19 +237,6 @@ class GUIManager(QMainWindow):
         self.tabs.addTab(memory, "Memoria")
         self.settings = SettingsManager(self)
         self.tabs.addTab(self.settings, "Ajustes")
-        tools = QWidget()
-        tl = QVBoxLayout(tools)
-        self.tool_select = QComboBox()
-        self.tool_select.addItems(self.core.registry.tools)
-        self.tool_select.currentTextChanged.connect(self.select_tool)
-        self.tool_desc = QLabel()
-        self.tool_desc.setWordWrap(True)
-        self.tool_args = QPlainTextEdit()
-        tl.addWidget(self.tool_select)
-        tl.addWidget(self.tool_desc)
-        tl.addWidget(self.tool_args)
-        tl.addWidget(self.button("Ejecutar herramienta", self.execute_tool))
-        self.tabs.addTab(tools, "Tools")
         integrations = QWidget()
         il = QVBoxLayout(integrations)
         self.integration_info = QLabel("Telegram: configura TELEGRAM_BOT_TOKEN en .env y activa el bot. Spotify: configura las credenciales y conecta tu cuenta.")
@@ -248,7 +258,12 @@ class GUIManager(QMainWindow):
         integration_scroll.setWidgetResizable(True)
         integration_scroll.setWidget(integrations)
         self.tabs.addTab(integration_scroll, "Conectar")
-        self.select_tool(self.tool_select.currentText())
+        voice_menu = QWidget()
+        vl = QVBoxLayout(voice_menu)
+        vl.addWidget(QLabel("Habla con VICTOR sin mostrar el historial."))
+        vl.addWidget(self.button("🎙 Abrir asistente de voz", lambda: self.show_voice(True)))
+        vl.addStretch()
+        self.tabs.addTab(voice_menu, "Voz")
         self.drawer.hide()
         self.drawer_animation = QPropertyAnimation(self.drawer, b"maximumWidth", self)
         self.drawer_animation.setDuration(180)
@@ -295,8 +310,66 @@ class GUIManager(QMainWindow):
         QTimer.singleShot(200, self.arrange_metrics)
 
     def quick_open(self):
-        self.toggle_drawer(3)
-        self.tool_select.setCurrentText("open_application")
+        self.entry.setPlainText("Abre ")
+        self.entry.setFocus()
+
+    def show_voice(self, enabled):
+        self.voice_view = enabled
+        self.chat_scroll.setVisible(not enabled)
+        self.voice_panel.setVisible(enabled)
+        pending = [card for card in self.approvals if not card.request.done.is_set()]
+        self.voice_panel.confirm_button.setVisible(bool(pending))
+        for card in pending:
+            if enabled:
+                self.voice_panel.content.insertWidget(2, card)
+            else:
+                self.chat_layout.addWidget(card)
+        if enabled:
+            self.config.save({"voice_enabled": True})
+        if enabled and self.drawer_open:
+            self.toggle_drawer()
+
+    def voice_confirmation_active(self):
+        return bool(self.confirmation_target and not self.confirmation_target.done.is_set())
+
+    def listen_approval(self):
+        pending = next((card for card in reversed(self.approvals) if not card.request.done.is_set()), None)
+        if not pending:
+            return
+        self.voice_output.stop()
+        self.voice_input.stop()
+        self.confirmation_target = pending.request
+        def begin():
+            if self.closing or pending.request.done.is_set() or self.confirmation_target is not pending.request:
+                return
+            if self.voice_input.running:
+                QTimer.singleShot(50, begin)
+            else:
+                self.voice_input.start()
+                self.voice_input.conversation_until = time.monotonic()+30
+        begin()
+        self.voice_panel.response.setText("Revisa la acción y sus parámetros. Di sí o confirmar para autorizar; no o cancelar para rechazar.")
+
+    def handle_voice_text(self, text, confirmation=None):
+        if confirmation is not None and confirmation is not self.confirmation_target:
+            return
+        if self.voice_confirmation_active() and confirmation is self.confirmation_target:
+            from victor.core import folded
+            word = folded(text)
+            if word not in ("si", "confirmar", "confirmo", "ejecutar", "no", "cancelar"):
+                self.voice_panel.response.setText("No reconocí una confirmación exacta. Di sí, confirmar, no o cancelar.")
+                return
+            card = next((c for c in self.approvals if c.request is self.confirmation_target), None)
+            if card:
+                accept = word in ("si", "confirmar", "confirmo", "ejecutar")
+                if accept and card.phrase:
+                    card.phrase.setText("EJECUTAR")
+                card.resolve(accept)
+            self.confirmation_target = None
+            self.voice_input.stop()
+            return
+        self.voice_panel.transcript.setText("Dijiste: " + text)
+        self.send(text)
 
     def refresh_config(self):
         configured = [p for p, enabled in self.config.credentials_status().items() if enabled]
@@ -358,7 +431,7 @@ class GUIManager(QMainWindow):
         def authorize():
             try:
                 self.core.google.authorize(self.integration_cancel)
-                self.emit("notice", "Google conectado. Consulta correos, calendario o Drive desde Tools.")
+                self.emit("notice", "Google conectado. Pide consultar correos, calendario o Drive por texto o voz.")
             except Exception as exc:
                 from victor.errors import VictorError
                 self.emit("notice", str(exc) if isinstance(exc, VictorError) else "Google no pudo autorizarse. Revisa credenciales y usuario de prueba en Cloud Console.")
@@ -391,7 +464,7 @@ class GUIManager(QMainWindow):
         self.voice_output.stop()
         self.entry.clear()
         self.error_label.clear()
-        self.append_message("user", (f"Remoto {origin['user_id']}: " if origin else "") + text)
+        self.append_message("user", (f"Remoto {origin['user_id']}: " + readable_names(text) if origin else text))
         self.current_bubble = self.append_message("assistant", "…")
         self.partial = ""
         self.send_button.setEnabled(False)
@@ -428,19 +501,6 @@ class GUIManager(QMainWindow):
     def mic_release(self):
         if self.config.get("voice_mode") == "push-to-talk":
             self.voice_input.release()
-
-    def select_tool(self, name):
-        tool = self.core.registry.tools[name]
-        self.tool_desc.setText(tool.description + " · " + tool.risk.name)
-        self.tool_args.setPlainText(json.dumps(example_args(tool.schema), ensure_ascii=False, indent=2))
-
-    def execute_tool(self):
-        try:
-            name = self.tool_select.currentText()
-            args = json.loads(self.tool_args.toPlainText())
-            self.send("Ejecutar " + name, (name, args))
-        except ValueError:
-            self.error_label.setText("Revisa el formato JSON de los argumentos.")
 
     def refresh_history(self):
         self.history_list.clear()
@@ -498,7 +558,7 @@ class GUIManager(QMainWindow):
             logging.getLogger("victor.gui").exception("Qt event failed")
             self.error_label.setText("No se pudo actualizar la interfaz. Consulta el registro local.")
         if self.closing:
-            threads = [self.core.thread, self.voice_input.thread, self.voice_output.thread, self.metrics.thread, self.telegram.thread, self.auth_thread, self.local_remote.thread, self.local_remote.capture_thread]
+            threads = [self.core.thread, self.voice_input.thread, self.voice_output.thread, self.metrics.thread, self.telegram.thread, self.auth_thread, self.local_remote.thread, self.local_remote.capture_thread, self.spotify_poller.thread]
             if not any(t and t.is_alive() for t in threads):
                 self.closed_cleanly = True
                 self.close()
@@ -506,8 +566,19 @@ class GUIManager(QMainWindow):
     def set_state(self, state):
         self.metric_values["state"].setText("● " + state)
         self.metric_values["state"].setStyleSheet(state_style(state))
+        if hasattr(self, "voice_panel"):
+            self.voice_panel.set_state(state)
 
     def handle_event(self, kind, payload):
+        if kind == "spotify_state":
+            self.player.update_state(payload)
+            if any(not c.request.done.is_set() for c in self.approvals):
+                self.player.hide()
+            return
+        if kind == "voice_confirmation":
+            request, text = payload
+            self.handle_voice_text(text, request)
+            return
         if kind == "google_summary":
             self.proactive.setText(payload)
             self.proactive.setVisible(bool(payload))
@@ -527,6 +598,8 @@ class GUIManager(QMainWindow):
                 self.send(payload["text"], payload.get("tool"), origin)
             return
         if kind == "remote_approval":
+            payload.details = confirmation_details(payload.title, payload.details)
+            payload.title = friendly_name(payload.title)
             self.telegram.request_approval(payload)
             return
         if kind in ("token", "stream_reset", "answer"):
@@ -534,12 +607,14 @@ class GUIManager(QMainWindow):
             if self.current_bubble:
                 self.current_bubble.set_text(self.partial or "…")
                 self.scroll_bottom()
+            self.voice_panel.response.setText(display_text(self.partial or "Pensando…"))
             if kind == "answer" and not self.closing and not self.core.cancel.is_set():
                 if self.active_remote:
-                    self.remote_service(self.active_remote).reply(self.active_remote, payload)
+                    self.remote_service(self.active_remote).reply(self.active_remote, display_text(payload))
                 else:
                     self.voice_output.speak(payload)
         elif kind == "approval":
+            self.player.hide()
             if self.closing or self.core.cancel.is_set():
                 payload.done.set()
             elif payload.risk == Risk.HIGH:
@@ -552,6 +627,14 @@ class GUIManager(QMainWindow):
                 self.approvals.append(card)
                 self.chat_layout.addWidget(card)
                 self.scroll_bottom()
+            if self.approvals and not payload.done.is_set():
+                card = self.approvals[-1]
+                button = QPushButton("🎙 Confirmar o cancelar por voz en este PC")
+                button.clicked.connect(self.listen_approval)
+                card.layout().addWidget(button)
+                if self.voice_view:
+                    self.voice_panel.content.insertWidget(2, card)
+                self.voice_panel.confirm_button.show()
         elif kind == "metrics":
             self.metric_values["cpu"].setText(f"{payload['cpu']:.0f}%")
             self.metric_values["ram"].setText(f"{payload['ram']:.0f}%")
@@ -563,7 +646,7 @@ class GUIManager(QMainWindow):
         elif kind == "connection":
             self.connection_label.setText(payload)
         elif kind in ("notice", "error"):
-            self.error_label.setText(payload[:800])
+            self.error_label.setText(readable_names(payload[:800]))
             if kind == "error" and self.active_remote:
                 self.remote_service(self.active_remote).reply(self.active_remote, payload)
         elif kind == "voice_status":
@@ -572,11 +655,16 @@ class GUIManager(QMainWindow):
             self.wave.setVisible(listening)
             self.wave.set_active(listening and self.isActiveWindow())
             self.set_state("Escuchando" if listening else "Listo")
+            self.voice_panel.set_state("Escuchando" if listening else "Pensando" if self.core.busy.is_set() else "Listo")
         elif kind == "speech_status":
             self.listen_text.setText(payload)
+            self.voice_panel.set_state("Respondiendo" if payload.startswith("Hablando") else "Listo")
         elif kind == "voice_text":
-            self.send(payload)
+            self.handle_voice_text(payload)
         elif kind == "done":
+            self.confirmation_target = None
+            self.voice_panel.confirm_button.hide()
+            self.voice_panel.set_state("Listo")
             if self.active_remote and self.active_remote.get("source") == "local_web":
                 self.local_remote.reply(self.active_remote, "Turno finalizado.", done=True)
             self.active_remote = None
@@ -603,6 +691,7 @@ class GUIManager(QMainWindow):
             self.integration_cancel.set()
             self.telegram.stop()
             self.local_remote.stop()
+            self.spotify_poller.stop_event.set()
             self.voice_output.close()
             self.metrics.stop_event.set()
             self.entry.setEnabled(False)

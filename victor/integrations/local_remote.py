@@ -34,6 +34,8 @@ class LocalRemote:
         self.address=''
         self.port=8443
         self.frames={}
+        from victor.integrations.remote_touch import register_touch
+        register_touch(self)
         self.capture_thread=None
         self.log=logging.getLogger('victor.remote')
         core.security.local_authorizer=self.authorized
@@ -194,7 +196,7 @@ class LocalRemote:
                     if time.monotonic()-stamp<.45:
                         await ws.send_json({'error':'Límite de frecuencia.','done':True});continue
                     stamp=time.monotonic()
-                    if not isinstance(data,dict) or data.get('tool') not in ('remote_pointer_batch','type_text','press_keys','remote_screen_stream'):
+                    if not isinstance(data,dict) or data.get('tool') not in ('remote_pointer_batch','remote_touch','type_text','press_keys','remote_screen_stream'):
                         await ws.send_json({'error':'Herramienta remota no permitida.','done':True});continue
                     self.emit('remote_command',{'text':'Remoto local: '+data['tool'],'tool':(data['tool'],data.get('args',{})),'origin':origin})
             except Exception:
@@ -213,7 +215,10 @@ class LocalRemote:
                     with self.lock: frame=self.frames.get(origin['session'])
                     if frame and frame[0]!=stamp:
                         stamp=frame[0]
-                        if isinstance(frame[1],bytes):await asyncio.wait_for(ws.send_bytes(frame[1]),3)
+                        if isinstance(frame[1],bytes):
+                            metadata=frame[2] if len(frame)>2 else {}
+                            await asyncio.wait_for(ws.send_json({'frame':metadata}),3)
+                            await asyncio.wait_for(ws.send_bytes(frame[1]),3)
                         else:await asyncio.wait_for(ws.send_json({'error':frame[1]}),3)
                     await asyncio.sleep(.03)
             except Exception:
@@ -265,8 +270,16 @@ class LocalRemote:
                 try:
                     import mss
                     with mss.MSS() as display:
-                        shot=display.grab(display.monitors[0]);image=Image.frombytes('RGB',shot.size,shot.rgb)
-                except Exception:image=ImageGrab.grab(all_screens=True).convert('RGB')
+                        area=display.monitors[0]
+                        shot=display.grab(area);image=Image.frombytes('RGB',shot.size,shot.rgb)
+                        left,top=area['left'],area['top']
+                except Exception:
+                    image=ImageGrab.grab(all_screens=True).convert('RGB')
+                    import ctypes
+                    left=ctypes.windll.user32.GetSystemMetrics(76) if os.name=='nt' else 0
+                    top=ctypes.windll.user32.GetSystemMetrics(77) if os.name=='nt' else 0
+                frame_id=secrets.token_hex(12)
+                geometry={'left':left,'top':top,'width':image.width,'height':image.height,'time':time.monotonic()}
                 image.thumbnail((1920,1080))
                 buffer=io.BytesIO();image.save(buffer,format='JPEG',quality=quality);data=buffer.getvalue()
             except Exception:
@@ -274,6 +287,10 @@ class LocalRemote:
             with self.lock:
                 for token in targets:
                     if token in self.sessions:
-                        self.frames[token]=(time.monotonic(),data)
+                        if isinstance(data,bytes):
+                            self.frame_history[frame_id]=geometry
+                            self.frame_history={k:v for k,v in self.frame_history.items() if time.monotonic()-v['time']<=30}
+                            self.frames[token]=(time.monotonic(),data,{'id':frame_id,'width':image.width,'height':image.height})
+                        else:self.frames[token]=(time.monotonic(),data)
                         if not isinstance(data,bytes):self.sessions[token]['stream_until']=0
             self.stop_event.wait(max(.01,1/fps-(time.monotonic()-start)))

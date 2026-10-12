@@ -6,6 +6,7 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QPlainTextEdit, QDialog
 from victor.security import Risk
 from victor.gui.theme import COLORS, bubble_style
+from victor.gui.tool_labels import friendly_name, confirmation_details, readable_names
 
 
 def display_text(text):
@@ -22,7 +23,7 @@ def display_text(text):
     prefix = ''
     if raw.startswith('[Resultado de herramienta ') and '\n' in raw:
         prefix, raw = raw.split('\n', 1)
-        prefix = prefix.strip('[]').replace('_', ' ') + '\n'
+        prefix = friendly_name(prefix.removeprefix('[Resultado de herramienta ').removesuffix(']')) + '\n'
     try:
         value = json.loads(raw.removeprefix('```json').removeprefix('```').removesuffix('```').strip())
         if isinstance(value, (dict, list)):
@@ -30,7 +31,7 @@ def display_text(text):
     except (ValueError, TypeError):
         if raw.startswith(('{', '[{', '```json')):
             raw = 'Preparando resultado…'
-    return prefix + re.sub(r"(?:[A-Za-z]:[/\\])[^\n]{70,}", lambda m: m[0][:20] + "…" + m[0][-35:], raw)
+    return readable_names(prefix + re.sub(r"(?:[A-Za-z]:[/\\])[^\n]{70,}", lambda m: m[0][:20] + "…" + m[0][-35:], raw))
 
 
 class MessageRow(QFrame):
@@ -86,12 +87,12 @@ class ApprovalCard(QFrame):
         self.request = request
         self.setObjectName("approval")
         layout = QVBoxLayout(self)
-        title = QLabel("⚠ Autorizar: " + request.title.replace('_', ' '))
+        title = QLabel("Autorizar: " + friendly_name(request.title))
         if request.origin:
             title.setText(title.text() + " · " + str(request.origin["user_id"]))
         title.setWordWrap(True)
         layout.addWidget(title)
-        details = QPlainTextEdit(request.details)
+        details = QPlainTextEdit(confirmation_details(request.title, request.details))
         details.setReadOnly(True)
         details.setMaximumHeight(160)
         layout.addWidget(details)

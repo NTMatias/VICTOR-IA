@@ -1,4 +1,4 @@
-# VICTOR.IA v3
+# VICTOR.IA v4
 
 Asistente de escritorio modular para **Windows 10/11 y Python 3.11+ de 64 bits**. Interfaz PySide6 (Qt), chat con streaming, cuatro proveedores de IA, herramientas supervisadas de Windows, memoria e historial SQLite y voz opcional.
 
@@ -47,7 +47,7 @@ Si Ollama ya está ejecutándose no necesitas `ollama serve`. Selecciona **Ollam
 - **Enter** envía; **Mayús+Enter** agrega una línea. Hay streaming de texto de todos los adaptadores.
 - **Detener** corta la voz, cancela confirmaciones y evita las siguientes acciones. Una petición de red ya iniciada puede tardar hasta el timeout en devolver el control; las acciones completadas no se deshacen.
 - **Nueva conversación**, búsqueda y eliminación están en el panel lateral ☰ → Historial. El historial vuelve a aparecer al abrir la aplicación.
-- En **Herramientas** selecciona una operación, edita los argumentos JSON y pulsa Ejecutar. No necesitas IA para usarlas.
+- La pestaña Tools fue retirada. Pide las acciones por texto o voz; el registro interno de herramientas conserva sus permisos. Los comandos locales documentados funcionan sin IA; las frases libres requieren un proveedor.
 - En **Memoria** escribe una clave y su valor, guárdalo, búscalo o elimínalo. Los cambios piden confirmación.
 - En **Configuración** puedes editar nombre, personalidad, formalidad, idioma, instrucciones, tema, voz, modelos, seguridad, carpetas y aliases de aplicaciones.
 
@@ -136,7 +136,7 @@ En Google Cloud Console crea un proyecto, habilita **Gmail API, Google Calendar 
 
 Reinicia VICTOR y pulsa ☰ → Conectar → **Conectar Google**. Se abre el navegador y un receptor temporal en 127.0.0.1. Hay 90 segundos para autorizar. El token se cifra con **DPAPI del usuario Windows** en `data/google.oauth`. Si Windows deniega DPAPI, la conexión persistente falla y nunca se guarda el token en texto plano. Debe ejecutarse en una sesión de escritorio normal del mismo usuario. No compartas `.env`, tokens ni copias de `data/`.
 
-Herramientas disponibles en Tools o mediante IA:
+Herramientas internas disponibles mediante órdenes naturales interpretadas por IA:
 
 - `google_unread`: hasta cinco correos no leídos, remitente, asunto y extracto proporcionado por Gmail.
 - `google_events`: próximos diez eventos del calendario principal. **Próximos eventos Google** en Conectar usa la misma herramienta. Solo tras obtener un evento real aparece su tarjeta en la cabecera; vacía o desconectada no inventa sugerencias.
@@ -224,7 +224,7 @@ Documentación: [ddgs](https://github.com/deedy5/ddgs), [Ollama tags](https://do
 
 ## Revisión visual v3, punto por punto
 
-Captura propia incluida: **INTERFAZ_V3.png**. Se abrió la aplicación real y se revisaron también las variantes a 420 px y panel cerrado.
+La captura de v3 fue sustituida por las capturas actualizadas de **CAPTURAS_V4/**. Se abrió la aplicación real y se revisaron también las variantes a 420 px y panel cerrado.
 
 1. Panel: ocupa su propia parte del layout, nunca tapa el chat. A menos de 800 px se coloca debajo para evitar comprimir ambos hasta hacerlos ilegibles; al ocultarlo el chat recupera el espacio. Bordes de 20 px y botones rápidos iguales; 2×2 al estrecharse.
 2. Burbujas: usuario azul a la derecha, asistente gris a la izquierda, máximo 70%, 12 px entre mensajes. El formato JSON de herramientas/historial se presenta como etiquetas y texto, manteniendo avisos de incertidumbre. Rutas largas abreviadas con texto completo en tooltip.
@@ -236,3 +236,36 @@ Captura propia incluida: **INTERFAZ_V3.png**. Se abrió la aplicación real y se
 La Parte A solo modificó GUI y sus pruebas. La Parte B corrigió la liberación del MP3 de Qt; la Parte C añadió registros Google y autorización de origen local mediante extensiones acotadas del núcleo existente, sin reemplazarlo.
 
 Fuentes de integración: [Google OAuth](https://googleapis.dev/python/google-auth-oauthlib/latest/reference/google_auth_oauthlib.flow.html), [Gmail send](https://developers.google.com/workspace/gmail/api/guides/sending), [Calendar events](https://developers.google.com/calendar/api/v3/reference/events/list), [Drive files](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list), [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/), [Uvicorn TLS](https://www.uvicorn.org/settings/).
+
+## V4: interfaz, voz y reproducción
+
+El panel lateral contiene **Historial, Memoria, Ajustes, Conectar y Voz**. No hay consola JSON ni pestaña Tools. Se conservan cabecera, CPU/RAM/red/estado, accesos rápidos y chat. Los estilos usan tarjetas de 24 px de radio, títulos de peso alto y cuerpo ligero; el tipo de letra elige Nunito/Rubik si están instalados y usa Segoe UI como respaldo.
+
+**Confirmaciones legibles.** Los nombres de todas las herramientas se traducen desde `gui/tool_labels.py`. Sus detalles muestran frases como «Nivel: 37 de 100», rutas, destinatario y cuerpo del correo; los argumentos internos y validación siguen intactos. Los resultados históricos también se presentan sin el nombre técnico. La información crítica de la confirmación no se abrevia.
+
+**Mini Spotify.** Aparece en la esquina inferior derecha cuando la cuenta conectada devuelve una canción. Consulta cada cinco segundos; tras un fallo espera 30 segundos. Usa carátula real si está disponible, título/artista con tooltip, anterior, reproducción/pausa, siguiente y volumen. Una pausa se muestra hasta cinco minutos. La × oculta el widget sin desconectar; vuelve a estar disponible al cambiar de pista. Se oculta durante confirmaciones para no taparlas. Solo Spotify volumen pasó a riesgo bajo; en seguridad normal no pide confirmación. El modo `strict` conserva su política de confirmar también acciones de bajo riesgo. Los demás controles conservan riesgo medio. El deslizador agrupa cambios durante 450 ms, espera si el núcleo está ocupado y consulta el estado real después. No existe reproducción simulada en la aplicación.
+
+**Asistente de voz.** En ☰ → Voz pulsa Abrir asistente de voz. Oculta el historial y muestra el micrófono grande, estado, última transcripción y respuesta. Activa la lectura de respuestas usando la salida de voz existente; se puede volver al chat. Reutiliza manual, push-to-talk, continua y wake word de Ajustes. Necesita el modelo Whisper ya descargado o el reconocimiento alternativo configurado.
+
+Para confirmar hablando, primero pulsa **Responder a la confirmación** (o el botón de voz dentro de la tarjeta) en el PC. Se detiene la voz de salida, se reinicia la captura y se vincula a esa solicitud concreta. Entonces acepta «sí», «confirmar», «confirmo» o «ejecutar»; «no»/«cancelar» rechazan. También admite acciones altas: es una autorización local explícita solicitada por el usuario. Las grabaciones de una escucha anterior no autorizan una solicitud nueva. Los mensajes/notas de voz recibidos por Telegram nunca se convierten en confirmación local: mantienen sus botones inline y las restricciones remotas. Los botones y la palabra EJECUTAR siguen disponibles como alternativa visual.
+
+## Telegram y lenguaje natural
+
+Telegram ya entrega cada frase libre al mismo VictorCore que el chat; v4 lo comprueba con pruebas nuevas y muestra resultados/confirmaciones legibles. Si falta IA, se entrega el error de configuración al chat remoto. No se creó otro agente ni una ruta de ejecución separada. «Abre Chrome», «abre google.com», redactar/enviar correo y consultar pantalla dependen de los comandos locales o de la IA configurada. Un contacto debe tener una dirección conocida; no se inventan destinatarios.
+
+Se añadió una herramienta interna supervisada para buscar y abrir el primer resultado público de YouTube. Permite al modelo resolver «abre YouTube y pon el video …» desde texto, voz o Telegram. La búsqueda pública puede fallar si YouTube cambia su página, exige consentimiento o bloquea el acceso. Se solicita reproducción automática al navegador, pero **no se afirma que esté sonando**: anuncios y políticas de autoplay pueden impedirlo. No se comprobó esta reproducción con cuenta y navegador reales durante v4. No usa una API key adicional ni elude restricciones de acceso.
+
+## Remoto v4: una sola pantalla móvil
+
+El QR abre el escritorio ocupando la mayor parte de la página y solicita inmediatamente autorizar 60 segundos de captura en el PC. Pantalla, tacto y teclado comparten la misma vista. Sigue haciendo falta el título exacto de la ventana destino y la aprobación del PC.
+
+- Un dedo mueve el cursor a la posición tocada y hace clic. Dos dedos desplazan verticalmente. Se respeta la proporción de la imagen, se rechazan toques en bandas vacías y se tienen en cuenta monitores con coordenadas negativas. Una imagen de referencia caduca a los 30 segundos para no ejecutar sobre una captura antigua.
+- **Teclado** enfoca un campo HTML y abre el teclado del celular. El texto se agrupa tras 450 ms de pausa y se pone en una cola acotada (máximo ocho entradas); también hay Retroceso, Intro, Escape, Tab y modificadores. El foco de campos de aplicaciones del PC no se detecta automáticamente: usa el botón Teclado.
+- Las entradas siguen pasando por SecurityManager. Texto e Intro requieren confirmación alta en el PC. Por ello **la escritura no se aplica instantáneamente sin autorización**, aunque se prepare mientras escribes. No se ha convertido el canal en un teclado sin permisos.
+- El streaming y el control usan trabajadores/conexiones separados. Imágenes de más de tres segundos se atenúan; puedes renovar la transmisión. Cada gesto, confirmación y red añade latencia. No es un sustituto de escritorio remoto profesional; fluidez y compatibilidad de teclado móvil deben probarse en tu Wi-Fi.
+
+Los flujos OAuth de Google y Spotify no fueron modificados. Si actualizas una instalación ya configurada, conserva tu `.env` y `data/`; el ZIP no los incluye. No necesitas reautorizar únicamente por este cambio de GUI.
+
+## Capturas incluidas
+
+`CAPTURAS_V4/01_general.png`, `02_sin_tools.png`, `03_confirmacion.png`, `04_spotify_ejemplo.png` y `05_voz.png` se generaron abriendo widgets Qt reales. **Solo la captura del mini Spotify usa datos de ejemplo**, marcada expresamente en la imagen; no acredita conexión ni reproducción real. La solicitud de confirmación es una prueba visual que se canceló sin ejecutar una acción.

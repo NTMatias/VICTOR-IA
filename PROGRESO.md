@@ -1,5 +1,13 @@
 # VICTOR.IA v2 — progreso y reanudación
 
+## V4
+- [x] A/B: pestaña Tools retirada; estilos más redondeados y nombres/detalles centralizados en español. Prueba GUI anterior aprobada. Referencia visual: el adjunto disponible contiene texto; se siguió la descripción escrita de estilo.
+- [x] C: mini reproductor con consulta real y controles por registro; volumen bajo, OAuth intacto.
+- [x] D: vista de voz y confirmación local explícitamente activada; mismo micrófono y orquestador.
+- [x] E: Telegram en lenguaje libre por IA, errores visibles y acción YouTube supervisada.
+- [x] F: página remota unificada y mapeo táctil; teclado sujeto a confirmación en PC.
+- [x] Entrega: pruebas completas, documentación, capturas propias y ZIP v4.
+
 ## V3
 - [x] Parte A: GUI únicamente. Panel comparte diseño (lateral en ancho, debajo en angosto), márgenes 20 px, botones iguales y 2×2, burbujas máximo 70%, resultados JSON presentados como texto, rutas con tooltip, tarjetas de confirmación destacadas, estados con color y compositor 52 px. Prueba GUI ampliada aprobada y capturas propias wide/narrow/closed revisadas. No se modificó núcleo en esta parte.
 - [x] Parte B: ddgs real, grabación 5 s, volumen 100→98→100 y Edge/Qt reproducido. Corregido bloqueo de MP3 al limpiar el reproductor; salida 0 tras corrección. Sin modelo Whisper, claves ni Ollama disponible. MSS/ImageGrab bloqueados, calculadora sin ventana persistente y SAPI acceso denegado; no se declaran resueltos. Datos completos en VERIFICACION.md al cierre.
@@ -26,3 +34,5 @@ Cerrar cada bloque con pruebas antes del siguiente. No reintentar pip ni una pru
 README.md y VERIFICACION.md leídos. Se conserva la evidencia de v1. Entorno `.venv` existente; no reinstalar paquetes ya presentes. Bloque 1 cerrado. ddgs 9.16 instalado desde wheel oficial. Un intento de descarga fue bloqueado por permisos de red; permiso concedido y descarga completada. Búsqueda real respondió con cuatro fuentes HTML, incluida docs.python.org. No se ha probado inferencia Ollama real.
 
 Cierre v2: compileall, 59 pruebas, imports nuevos y pip check aprobados. Empaquetado limpio mediante work/package_project.py; revisión CRC y lista explícita de archivos. Google/remoto QR diferidos; consultar VERIFICACION.md antes de atribuir pruebas reales a APIs, audio o escritorio.
+
+Cierre v4: 76 pruebas aprobadas, compilación y JavaScript correctos, cinco capturas revisadas. OAuth/core/security idénticos a v3. Sin instalación de dependencias. Validaciones de servicio real pendientes detalladas en VERIFICACION.md; miniplayer de ejemplo solo en evidencia.

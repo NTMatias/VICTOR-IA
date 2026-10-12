@@ -98,14 +98,19 @@ class VoiceInput:
                         break
                     continue
                 self.emit("voice_status", "Escuchando…")
+                confirmation_context = getattr(self, "confirmation_context", lambda: None)()
                 text = self.listen()
                 if self.stop_event.is_set():
                     break
                 if text:
-                    command = extract_command(text, self.config.get("wake_word"), required=continuous and time.monotonic() > self.conversation_until)
+                    confirming = getattr(self, "confirmation_pending", lambda: False)()
+                    command = extract_command(text, self.config.get("wake_word"), required=continuous and not confirming and time.monotonic() > self.conversation_until)
                     if command:
                         self.conversation_until = time.monotonic() + self.config.get("conversation_window")
-                        self.emit("voice_text", command)
+                        if confirmation_context is not None:
+                            self.emit("voice_confirmation", (confirmation_context, command))
+                        else:
+                            self.emit("voice_text", command)
                 if not continuous:
                     break
                 self.stop_event.wait(0.7)
