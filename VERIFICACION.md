@@ -1,3 +1,74 @@
+# Verificación v5 — 25/09/2026
+
+## Resultado ejecutado, sin atribuir pruebas ajenas
+
+- Suite completa: **83 pruebas aprobadas en 23,887 s**. Siete pruebas nuevas cubren variantes del wake word, aviso tras fallos, caché incompleta/local, auditoría acotada, predicción/rechazo Spotify, debounce, presentación y diagnóstico sin credenciales ni ejecución de herramientas. La salida de pruebas contiene excepciones inducidas por mocks; no son fallos de la suite.
+- `verificar.bat --sin-pausa`: salida 0. Ejecutó `python -m compileall -q main.py victor tests` y los imports esenciales. La suite también importa todos los módulos. No se reinstalaron dependencias.
+- Ventana Qt real abierta y cerrada limpiamente; capturas propias `CAPTURAS_V5/principal.png`, `estrecha.png` y `preparacion.png`. Métricas visibles proceden de psutil; el panel de preparación se capturó con un perfil temporal sin cuentas ni modelo, no con datos de usuario.
+- El script de humo no comprueba cuentas ni dispositivos: lo dice en su salida.
+- ZIP v5 generado con 81 archivos; CRC e integridad aprobados. Empaquetado por lista de inclusión, sin .venv, data, modelos, .env ni cachés. Se incluyen verificar.bat y tres capturas propias.
+- Comparación byte a byte con ZIP v4: core.py, security.py, local_remote.py, remote_view.py, remote_touch.py, remote_page.py, google.py, spotify.py e input_automation.py **idénticos**. Se conserva la arquitectura, OAuth, seguridad y remoto que el usuario ya probó en su PC real.
+
+## P1 — referencia recibida y medida directamente
+
+Se abrió la imagen real Nextendo (1568×724), se inspeccionaron sus píxeles y se midieron las máscaras de título y punto con Pillow/NumPy. Límites con tolerancia ±1–2 px por suavizado:
+
+| Elemento | Medición en Nextendo |
+|---|---|
+| Hero | x321..1239, y92..223; aproximadamente 918×131 px |
+| Tinta del título | x349..978, y122..156; 35 px de alto visible |
+| Resumen | x346..1214, y267..343; 868×76 px |
+| Punto verde | x365..379, y298..312; 15×15 px |
+| Primera tarjeta | x346..776, y394..453; 430×59 px |
+| Separación columnas/filas | 8 px / 8 px |
+| Radios aproximados | Hero 26, resumen 20, tarjetas 14 px |
+
+El raster NO contiene metadatos de familia tipográfica ni font-weight: no es posible medir un valor CSS 700/800 exacto a partir de él. Se observa un título muy grueso, de trazo ancho y redondeado. VICTOR usa peso 800 declarado y QFont ExtraBold, tamaño 44 px en ancho y 28 px en angosto; conserva la fuente disponible de Windows. La altura de tinta no equivale al tamaño CSS.
+
+Comparación de la captura propia final: mismo orden hero/descripción → resumen/punto → encabezado → dos columnas; mismos radios 26/20/14, punto 15 y hueco 8 entre tarjetas. Las métricas ponen icono/detalle a la izquierda y valor a la derecha. Diferencias: VICTOR conserva su paleta azul (sin degradado púrpura), símbolos en vez de carátulas de juegos, cuatro tarjetas y un área de chat. Su fuente de Windows no es idéntica a la referencia, los títulos de métricas son más pequeños y las tarjetas se adaptan al ancho disponible. No se promete una réplica píxel por píxel.
+
+## P2 — remoto conservado; diagnóstico concreto del escritorio del agente
+
+**Evidencia del usuario:** pantalla del PC en el celular y ratón táctil ya funcionan en su PC real. Se reconoce como verificación aportada por él; no se trata como función rota.
+
+Prueba nueva en este proceso:
+- MSS: `ScreenShotError: Windows graphics function failed (no error provided): BitBlt`.
+- Pillow ImageGrab: `OSError: screen grab failed`.
+- GetProcessWindowStation: `WinSta0`.
+- GetThreadDesktop: `CodexSandboxDesktop-163b71cc6e630ea8b43f7939ca782a83`.
+- OpenInputDesktop: `Default`.
+- Sesión del proceso = sesión de consola activa = 1; no es una sesión de Escritorio Remoto.
+
+La diferencia comprobada es el **escritorio aislado de Codex frente al escritorio interactivo Default**, no un PC sin monitor ni una falta hipotética de mss. Las dos APIs no pudieron capturar desde ese contexto. Windows no proporcionó un código adicional para BitBlt; no se inventa una causa interna del controlador. `QWidget.grab()` sí capturó las ventanas propias: no es una captura de todo el escritorio. No se intentó saltar ese aislamiento.
+
+No se generó un QR nuevo persistente para la entrega: dura 120 s y no daría una prueba real de pantalla/celular en este contexto. Las pruebas de rutas, seguridad y geometría existentes pasaron dentro de la suite. No se atribuye una prueba nueva con celular, teclado nativo ni Wi-Fi al agente.
+
+Piezas para diagnóstico en el PC normal (líneas de esta entrega):
+- `victor/integrations/local_remote.py:72`: QR; `:157`: HTTPS/WSS; `:247`: permiso/vida del stream; `:261`: worker de captura independiente.
+- `victor/integrations/remote_view.py:23`: coordenadas y bandas por aspect ratio; `:24`: toque; `:25–27`: gestos; `:28`: foco del input/teclado nativo; `:29–33`: texto/IME/Retroceso/Intro.
+- `victor/integrations/remote_touch.py:10`: geometría real, origen virtual, antigüedad y validación.
+- `victor/system/input_automation.py:45`: escritura Unicode; `:72`: teclas.
+- `victor/tools/builtins.py:44`: type_text conserva riesgo ALTO. Mouse/tacto mantienen MEDIO.
+
+**Límite explícito:** el texto móvil se agrupa tras 450 ms y requiere EJECUTAR en el PC; no es escritura instantánea sin confirmación. Se conserva el botón Teclado, no se detecta automáticamente que un clic haya enfocado un campo. Relajar esa política rompería el requisito de conservar los niveles y security.py. El flujo supervisado existente se conserva, pero esos dos aspectos de la experiencia solicitada no se declaran completados.
+
+## P3 — Spotify
+
+Predicción visual de reproducir/pausar inmediata y mensaje de orden pendiente; no se inventa la próxima pista. Los controles continúan pasando por el mismo registro/confirmación. Rechazo o fallo restaura el estado confirmado; tool_result reconcilia datos reales. Polling en worker: 2 s reproduciendo, 5 s pausado, 30 s tras error, con refresco al terminar una orden. Volumen: 300 ms de debounce, no envía mientras se mantiene el arrastre y conserva solo el último valor. Ningún OAuth ni operación de SpotifyManager cambió.
+
+Mediciones reales **solo de UI con API simulada**: callback de predicción 0,47 ms en prueba focal, 0,11 ms en la primera suite y **0,20 ms en la suite final**. Un arrastre de 40 valores produjo una sola orden con el último valor. No hay token Spotify autorizado disponible en este perfil del agente, por lo que NO se midieron latencia HTTP, cambio real de canción ni tiempo acústico. Esto no invalida la cuenta que el usuario ya conectó en su instalación.
+
+## P4 — qué se ejecutó y qué falta
+
+- **A:** worker de descarga real de Whisper base completó 147.882.941 bytes (~148 MB) desde Hugging Face tras conceder red; primera tentativa sin red falló de forma clara. Se descargaron cuatro archivos, se cargó WhisperModel CPU int8 y se ejecutó inferencia sobre 1 s de silencio: 0 segmentos, 1,45 s incluyendo carga. No equivale a medir precisión de voz. La descarga queda en data/models (excluida del ZIP); el usuario pulsa el botón una vez en una instalación limpia. QProcess mantiene la GUI libre y se termina al cerrar, con límite de tiempo. Progreso basado en bytes cuando el SDK los informa; caché incompleta no habilita la voz. No se hizo una nueva grabación ni una frase real de extremo a extremo. La descarga fría real se invocó por el mismo worker desde consola. Después se pulsó el botón real de la GUI con el destino de prueba apuntando al modelo ya descargado: QProcess completó, activó el estado disponible y cerró limpiamente. La GUI siguió procesando eventos. Esto prueba reanudación/caché desde el botón; no se duplicó una descarga fría de 148 MB ni se simuló que se hubiese hecho.
+- **B:** case/acentos y variantes delimitadas Bictor/Viktor/Vitor/Vicktor; tras tres fallos sugiere proximidad/dispositivo. Pruebas con transcripciones controladas, no ensayo acústico en vivo. No confunde victorioso/victoria ni confirmaciones con wake word.
+- **C:** botón ⛶ / F11, reversible; prueba GUI aprobada.
+- **D:** panel lee un sufijo acotado del log y muestra hasta 20 eventos de ejecución o confirmación/rechazo. No muestra líneas arbitrarias que puedan contener secretos. Prueba con registros controlados aprobada; perfil de captura sin acciones muestra lista vacía, no inventada.
+- **E:** prechequeo automático local y botón de conexiones reales en otro QProcess: respuesta breve del proveedor seleccionado sin herramientas, API Spotify, Google Calendar y getMe de Telegram. Límite global 90 s y terminación al cerrar. Se ejecutó el botón GUI real sin credenciales y se obtuvieron cinco resultados explícitos; además pruebas simuladas verifican que no se ejecuten herramientas devueltas por el modelo ni se impriman claves. Falta ejecutar esas consultas con cuentas autenticadas aquí. Gmail/Drive, audio y emparejamiento se distinguen de los servicios comprobados y no se dan por verificados.
+- **F:** verificar.bat ejecutado correctamente; compilación e imports, sin instalar nada.
+
+## Evidencia histórica v4 (no constituye nueva prueba v5)
+
 # Verificación v4 — 25/09/2026
 
 ## Comprobado en este turno

@@ -1,3 +1,25 @@
+# Novedades y uso v5
+
+Se conserva el proyecto existente, sus cuentas y el control remoto ya probado por el usuario. Para actualizar tu instalación, conserva tu `.env`, `data/` y `.venv`; sustituye el código y los scripts. No hace falta reinstalar las dependencias que ya funcionan. Ejecuta `verificar.bat` y después `iniciar.bat`.
+
+En instalación limpia: `instalar.bat`, configura las claves que uses según las instrucciones históricas inferiores y `iniciar.bat`. Menú ☰ → **¿Estoy listo?** → **Descargar modelo de voz** prepara Whisper una vez (~150 MB para base; otros modelos pueden ocupar mucho más). El resto de la app funciona durante la descarga. F11 o ⛶ alterna presentación. El mismo panel muestra preparación local y últimas acciones del registro. “Configurado” no significa que una cuenta haya sido verificada online. Pulsa **¿Estoy listo? · comprobar conexiones** para una consulta breve al modelo de IA (puede consumir unos pocos tokens), Spotify, Google Calendar y Telegram, sin ejecutar herramientas ni enviar mensajes. El proceso se puede cerrar con la app y tiene un límite global de 90 s. Gmail/Drive, micrófono y emparejamiento Telegram se indican como no comprobados.
+
+## Prueba del teclado desde tu celular, paso a paso
+
+1. Inicia VICTOR con `iniciar.bat` en tu escritorio normal de Windows, y conecta PC y celular a la misma Wi-Fi. Abre Bloc de notas y deja un documento vacío, sin información importante. Copia exactamente el título de su ventana (puede variar entre Windows 10 y 11).
+2. En VICTOR: ☰ → Conectar → **Activar / detener remoto HTTPS** y luego **Mostrar QR local**. Si aún está iniciando, espera el aviso del servidor y genera el QR.
+3. Escanea ese QR: la dirección debe coincidir con la IP mostrada por VICTOR, con formato `https://<IP-del-PC>:8443/#<código-de-un-uso>`. El QR caduca en 120 s. En el aviso de certificado local autofirmado, entra en **Avanzado → Continuar a esa IP** (Safari: Mostrar detalles → Visitar este sitio web, si ofrece la opción). Acepta solamente la IP que ves en tu PC. Si el navegador no permite continuar, prueba otro navegador o revisa su política; no desactives globalmente la seguridad. Si Windows pregunta por acceso de Python en el firewall, permite solo la red privada de confianza.
+4. Autoriza en VICTOR la solicitud de compartir pantalla. En el móvil debe aparecer **VICTOR · Tu escritorio** con la imagen del PC. En el campo superior escribe el título exacto de Bloc de notas. No omitas ese destino: los controles lo validan.
+5. Toca el área de escritura de Bloc de notas **sobre la imagen remota**. Revisa y acepta la acción media en el PC: el cursor se mueve a esa posición proporcional y hace clic. Las bandas vacías no cuentan como pantalla. Dos dedos envían scroll, también supervisado. Usa **Renovar pantalla · 60 s** si deja de actualizar; el stream se concede por períodos de 60 s.
+6. Pulsa **Teclado** debajo de la imagen. Se enfoca un input HTML y debe abrirse el teclado nativo del celular. Escribe `Hola desde mi celular`, y espera al menos 450 ms. Revisa en el PC la solicitud de escribir ese texto, escribe **EJECUTAR** y confirma. Solo entonces el texto debe aparecer en Bloc de notas. Intro/Retroceso se envían por sus botones y conservan sus controles de seguridad. Si está pendiente una aprobación, resuélvela antes de seguir escribiendo.
+7. Pulsa **Detener** en el móvil y desactiva HTTPS en el PC al terminar. La sesión expira a los diez minutos; genera otro QR para volver a entrar.
+
+El teclado se comparte en la misma página que la pantalla. **Esta entrega no promete un espejo de teclas sin confirmación**: type_text conserva riesgo alto. Tampoco detecta automáticamente un campo enfocado; usa el botón Teclado. El remoto existente no fue modificado. Si falla en tu PC, reporta navegador, versión de Windows, paso exacto, texto del error y si la imagen seguía actualizándose; no compartas QR activos, claves ni tokens.
+
+Mediciones visuales, límites de Spotify y diagnóstico del escritorio aislado del agente: **VERIFICACION.md**. Pendientes explícitos: **PROGRESO.md**. Capturas finales propias: **CAPTURAS_V5/**.
+
+---
+
 # VICTOR.IA v4
 
 Asistente de escritorio modular para **Windows 10/11 y Python 3.11+ de 64 bits**. Interfaz PySide6 (Qt), chat con streaming, cuatro proveedores de IA, herramientas supervisadas de Windows, memoria e historial SQLite y voz opcional.

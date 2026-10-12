@@ -14,6 +14,7 @@ class SpotifyPoller:
     def __init__(self,core,emit):
         self.core,self.emit=core,emit
         self.stop_event=threading.Event()
+        self.refresh_event=threading.Event()
         self.thread=threading.Thread(target=self.run,name='victor-spotify-status',daemon=True)
         self.art_url='';self.art=b''
 
@@ -41,6 +42,7 @@ class SpotifyPoller:
                     raw=self.core.spotify.client().current_playback()
                     item=(raw or {}).get('item')
                     if item:
+                        delay=2 if raw.get('is_playing') else 5
                         images=item.get('album',{}).get('images',[])
                         art=self.cover(images[-1]['url'] if images else '')
                         self.emit('spotify_state',{'id':item.get('id') or item.get('uri'), 'name':item.get('name','Sin título'),
@@ -51,7 +53,10 @@ class SpotifyPoller:
             except Exception as exc:
                 logging.getLogger('victor.spotify').info('status unavailable type=%s',type(exc).__name__)
                 self.emit('spotify_state',None);delay=30
-            self.stop_event.wait(delay)
+            deadline=time.monotonic()+delay
+            while not self.stop_event.is_set() and time.monotonic()<deadline:
+                if self.refresh_event.wait(min(.2,max(0,deadline-time.monotonic()))):
+                    self.refresh_event.clear();break
 
 
 def register_player(core):
@@ -70,6 +75,8 @@ class SpotifyMiniPlayer(QFrame):
     def __init__(self,app):
         super().__init__(app.root)
         self.app=app;self.state=None;self.dismissed=False;self.paused_since=None
+        self.pending=None
+        self.confirmed_state=None
         self.setObjectName('player')
         self.setFixedSize(320,170)
         layout=QVBoxLayout(self)
@@ -91,24 +98,55 @@ class SpotifyMiniPlayer(QFrame):
         self.volume=QSlider(Qt.Orientation.Horizontal);self.volume.setRange(0,100);row.addWidget(self.volume)
         self.level=QLabel('—');row.addWidget(self.level);layout.addLayout(row)
         self.debounce=QTimer(self);self.debounce.setSingleShot(True);self.debounce.timeout.connect(self.volume_changed)
-        self.volume.valueChanged.connect(lambda value:(self.level.setText(str(value)),self.debounce.start(450)))
+        self.volume.valueChanged.connect(lambda value:(self.level.setText(str(value)),self.debounce.start(300)))
         self.hide()
 
     def dismiss(self):
         self.dismissed=True;self.debounce.stop();self.hide()
 
     def action(self,name):
-        if not self.state:return
+        if not self.state or self.pending or self.app.core.busy.is_set():return
         if name=='toggle':name='spotify_pause' if self.state['playing'] else 'spotify_resume'
+        self.confirmed_state=dict(self.state)
+        self.pending=name
+        if name in ('spotify_pause','spotify_resume'):
+            self.state=dict(self.state,playing=name=='spotify_resume')
+            self.play.setText('⏸' if self.state['playing'] else '▶')
+        self.artist.setText('Pendiente de autorización / Spotify…')
         from victor.gui.tool_labels import friendly_name
         self.app.send(friendly_name(name),(name,{}))
 
     def volume_changed(self):
+        if self.volume.isSliderDown():
+            self.debounce.start(300);return
         if self.app.core.busy.is_set():
             self.debounce.start(500);return
         self.app.send('🎵 Spotify: ajustar volumen',('spotify_volume',{'level':self.volume.value()}))
 
+    def finish_action(self):
+        """Retira la predicción al terminar, incluso si se rechazó o falló."""
+        if self.pending:
+            self.pending=None
+            if self.confirmed_state:self.update_state(self.confirmed_state)
+            self.confirmed_state=None
+        self.app.spotify_poller.refresh_event.set()
+
+    def reconcile(self, name, result):
+        if not name.startswith('spotify_'):
+            return
+        actual = result.get('result', {}) if result.get('ok') else {}
+        actual = actual.get('estado', actual) if isinstance(actual, dict) else {}
+        if self.state and 'reproduciendo' in actual:
+            state = dict(self.state, playing=bool(actual['reproduciendo']))
+            if actual.get('cancion'):
+                state.update(name=actual['cancion'], artists=', '.join(actual.get('artistas', [])))
+                if state['name'] != self.state['name']:
+                    state['art'] = b''
+            self.confirmed_state = state
+        self.finish_action()
+
     def update_state(self,state):
+        if self.pending:return
         if not state:self.state=None;self.hide();return
         if self.state and state['id']!=self.state['id']:self.dismissed=False;self.paused_since=None
         self.state=state

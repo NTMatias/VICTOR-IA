@@ -89,6 +89,7 @@ class VoiceInput:
 
     def _run(self):
         continuous = self.config.get("voice_mode") == "continua"
+        misses = 0
         try:
             while not self.stop_event.is_set():
                 if not self.can_listen():
@@ -106,11 +107,19 @@ class VoiceInput:
                     confirming = getattr(self, "confirmation_pending", lambda: False)()
                     command = extract_command(text, self.config.get("wake_word"), required=continuous and not confirming and time.monotonic() > self.conversation_until)
                     if command:
+                        misses = 0
                         self.conversation_until = time.monotonic() + self.config.get("conversation_window")
                         if confirmation_context is not None:
                             self.emit("voice_confirmation", (confirmation_context, command))
                         else:
                             self.emit("voice_text", command)
+                    else:
+                        misses += 1
+                elif continuous:
+                    misses += 1
+                if continuous and misses >= 3:
+                    self.emit("notice", "No he reconocido la palabra de activación varias veces. Habla más cerca del micrófono o revisa el dispositivo en Ajustes.")
+                    misses = 0
                 if not continuous:
                     break
                 self.stop_event.wait(0.7)

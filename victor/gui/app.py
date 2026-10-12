@@ -6,7 +6,7 @@ import threading
 import time
 from datetime import datetime
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QPoint, QEasingCurve
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QShortcut, QKeySequence
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QLabel, QPushButton, QVBoxLayout,
     QHBoxLayout, QBoxLayout, QGridLayout, QScrollArea, QTabWidget, QListWidget, QListWidgetItem, QLineEdit, QPlainTextEdit, QComboBox, QMessageBox)
 from victor.core import VictorCore
@@ -52,6 +52,7 @@ class GUIManager(QMainWindow):
         self.current_bubble = None
         self.partial = ""
         self.drawer_open = False
+        self.presentation = False
         self.setWindowTitle("VICTOR.IA · Asistente personal")
         self.resize(940, 880)
         self.setMinimumSize(420, 640)
@@ -103,9 +104,11 @@ class GUIManager(QMainWindow):
         small = QLabel(greeting + "  ·  VICTOR.IA")
         small.setStyleSheet(LABEL_STYLES["muted"])
         title = QLabel("¿En qué te ayudo?")
+        self.hero_title = title
+        title.setWordWrap(True)
         title.setFont(title_font())
         title.setStyleSheet(LABEL_STYLES["heading"])
-        greetings.addWidget(small)
+        small.hide()
         greetings.addWidget(title)
         subtitle = QLabel("Tu asistente, a una palabra de distancia.")
         subtitle.setWordWrap(True)
@@ -114,6 +117,11 @@ class GUIManager(QMainWindow):
         header.addLayout(greetings, 1)
         self.menu = self.button("☰", lambda: self.toggle_drawer())
         header.addWidget(self.menu)
+        self.present_button = self.button("⛶", self.toggle_presentation)
+        self.present_button.setToolTip("Presentación · F11")
+        header.addWidget(self.present_button)
+        self.presentation_shortcut = QShortcut(QKeySequence("F11"), self)
+        self.presentation_shortcut.activated.connect(self.toggle_presentation)
         self.mic = self.button("●", self.toggle_mic)
         self.mic.setObjectName("mic")
         self.mic.setToolTip("Activar / desactivar micrófono")
@@ -121,22 +129,68 @@ class GUIManager(QMainWindow):
         self.mic.pressed.connect(self.mic_press)
         self.mic.released.connect(self.mic_release)
         # El micrófono forma parte del compositor inferior.
-        layout.addLayout(header)
+        hero = QFrame()
+        hero.setObjectName("hero")
+        hero.setLayout(header)
+        header.setContentsMargins(24, 18, 24, 18)
+        layout.addWidget(hero)
+        overview = QFrame()
+        overview.setObjectName("overview")
+        overview_layout = QVBoxLayout(overview)
+        overview_layout.setContentsMargins(16, 16, 16, 16)
+        overview_layout.setSpacing(12)
+        layout.addWidget(overview)
+        self.summary = QFrame()
+        self.summary.setObjectName("summary")
+        summary_layout = QHBoxLayout(self.summary)
+        summary_layout.setContentsMargins(18, 12, 18, 12)
+        summary_layout.setSpacing(18)
+        self.status_dot = QLabel()
+        self.status_dot.setFixedSize(15, 15)
+        self.status_dot.setStyleSheet("background: #5fdfbf; border-radius: 7px;")
+        summary_layout.addWidget(self.status_dot)
+        summary_text = QVBoxLayout()
+        self.summary_title = QLabel("Asistente listo")
+        self.summary_title.setStyleSheet("font-size: 19px; font-weight: 700;")
+        self.summary_description = QLabel("Estado local del equipo · servicios de IA sin verificar")
+        self.summary_description.setWordWrap(True)
+        self.summary_description.setStyleSheet(LABEL_STYLES["muted"])
+        summary_text.addWidget(self.summary_title)
+        summary_text.addWidget(self.summary_description)
+        summary_layout.addLayout(summary_text, 1)
+        overview_layout.addWidget(self.summary)
+        section = QLabel("Tu equipo en directo")
+        section.setStyleSheet("font-size: 19px; font-weight: 800;")
+        overview_layout.addWidget(section)
         self.metric_grid = QGridLayout()
+        self.metric_grid.setSpacing(8)
         self.metric_cards, self.metric_values = [], {}
         for key, label in (("cpu", "CPU"), ("ram", "RAM"), ("network", "RED · uso actual"), ("state", "ESTADO")):
             card = QFrame()
-            card.setObjectName("card")
-            inner = QVBoxLayout(card)
-            caption = QLabel(label)
+            card.setObjectName("metricCard")
+            inner = QHBoxLayout(card)
+            inner.setContentsMargins(10, 10, 10, 10)
+            inner.setSpacing(8)
+            icon = QLabel({"cpu": "◈", "ram": "▣", "network": "⇅", "state": "◉"}[key])
+            icon.setStyleSheet("color: #397bfa; font-size: 24px; font-weight: 700;")
+            inner.addWidget(icon)
+            caption = QLabel({"cpu":"CPU", "ram":"RAM", "network":"Red", "state":"Asistente"}[key])
+            caption.setWordWrap(True)
             caption.setStyleSheet(LABEL_STYLES["caption"])
             value = QLabel("Listo" if key == "state" else "—")
             value.setStyleSheet(LABEL_STYLES["metric"])
-            inner.addWidget(caption)
+            details = QVBoxLayout()
+            details.setSpacing(2)
+            details.addWidget(caption)
+            hint = QLabel({"cpu":"En uso", "ram":"En uso", "network":"KB/s", "state":"Estado"}[key])
+            hint.setStyleSheet(LABEL_STYLES["caption"])
+            details.addWidget(hint)
+            inner.addLayout(details, 1)
+            value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             inner.addWidget(value)
             self.metric_values[key] = value
             self.metric_cards.append(card)
-        layout.addLayout(self.metric_grid)
+        overview_layout.addLayout(self.metric_grid)
         self.quick = QGridLayout()
         self.quick_buttons = []
         for i, (label, command) in enumerate((("Ver pantalla", lambda: self.send("¿Qué hay en mi pantalla?")),
@@ -264,6 +318,9 @@ class GUIManager(QMainWindow):
         vl.addWidget(self.button("🎙 Abrir asistente de voz", lambda: self.show_voice(True)))
         vl.addStretch()
         self.tabs.addTab(voice_menu, "Voz")
+        from victor.gui.maintenance import MaintenancePanel
+        self.maintenance = MaintenancePanel(self)
+        self.tabs.addTab(self.maintenance, "¿Estoy listo?")
         self.drawer.hide()
         self.drawer_animation = QPropertyAnimation(self.drawer, b"maximumWidth", self)
         self.drawer_animation.setDuration(180)
@@ -272,11 +329,14 @@ class GUIManager(QMainWindow):
 
     def arrange_metrics(self):
         columns = 2 if self.root.width() < 650 else 4
+        self.hero_title.setStyleSheet("font-size: " + ("28" if self.root.width() < 650 else "44") + "px; font-weight: 800;")
+        for value in self.metric_values.values():
+            value.setStyleSheet("font-size: " + ("16" if self.root.width() < 650 else "21") + "px; font-weight: 700;")
         for i in range(4):
-            self.metric_grid.setColumnStretch(i, 1 if i < columns else 0)
+            self.metric_grid.setColumnStretch(i, 1 if i < 2 else 0)
             self.quick.setColumnStretch(i, 1 if i < columns else 0)
         for i, card in enumerate(self.metric_cards):
-            self.metric_grid.addWidget(card, i // columns, i % columns)
+            self.metric_grid.addWidget(card, i // 2, i % 2)
         for i, button in enumerate(self.quick_buttons):
             self.quick.addWidget(button, i // columns, i % columns)
 
@@ -487,6 +547,11 @@ class GUIManager(QMainWindow):
     def start_mic(self):
         if self.core.busy.is_set():
             return
+        if self.config.get('voice_backend') == 'whisper' and (not self.maintenance.ready or self.maintenance.checked_name != self.config.get('whisper_model')):
+            self.error_label.setText('Prepara el modelo en el panel ¿Estoy listo?; el chat sigue disponible.')
+            self.toggle_drawer(self.tabs.indexOf(self.maintenance))
+            self.maintenance.refresh()
+            return
         if self.config.get("voice_backend") == "google" and not getattr(self, "audio_consent", False):
             if QMessageBox.question(self, "Audio online", "Google recibirá el audio para transcribirlo. ¿Continuar?") != QMessageBox.StandardButton.Yes:
                 return
@@ -559,17 +624,31 @@ class GUIManager(QMainWindow):
             self.error_label.setText("No se pudo actualizar la interfaz. Consulta el registro local.")
         if self.closing:
             threads = [self.core.thread, self.voice_input.thread, self.voice_output.thread, self.metrics.thread, self.telegram.thread, self.auth_thread, self.local_remote.thread, self.local_remote.capture_thread, self.spotify_poller.thread]
-            if not any(t and t.is_alive() for t in threads):
+            if not any(t and t.is_alive() for t in threads) and not self.maintenance.running():
                 self.closed_cleanly = True
                 self.close()
 
+    def toggle_presentation(self):
+        self.presentation = not self.presentation
+        if self.presentation and self.drawer_open:
+            self.toggle_drawer()
+        self.menu.setVisible(not self.presentation)
+        self.present_button.setText("↙" if self.presentation else "⛶")
+        self.present_button.setToolTip("Salir de presentación · F11" if self.presentation else "Presentación · F11")
+
     def set_state(self, state):
-        self.metric_values["state"].setText("● " + state)
-        self.metric_values["state"].setStyleSheet(state_style(state))
+        self.summary_title.setText("Asistente · " + state)
+
+        self.metric_values["state"].setText(state)
+        color = "#397bfa" if state in ("Pensando", "Escuchando", "Respondiendo") else "#5fdfbf" if state == "Listo" else "#9ba9c3"
+        self.status_dot.setStyleSheet("background: " + color + "; border-radius: 7px;")
         if hasattr(self, "voice_panel"):
             self.voice_panel.set_state(state)
 
     def handle_event(self, kind, payload):
+        if kind == 'tool_result':
+            self.player.reconcile(*payload)
+            return
         if kind == "spotify_state":
             self.player.update_state(payload)
             if any(not c.request.done.is_set() for c in self.approvals):
@@ -638,7 +717,7 @@ class GUIManager(QMainWindow):
         elif kind == "metrics":
             self.metric_values["cpu"].setText(f"{payload['cpu']:.0f}%")
             self.metric_values["ram"].setText(f"{payload['ram']:.0f}%")
-            self.metric_values["network"].setText(f"{payload['network']/1024:.0f} KB/s")
+            self.metric_values["network"].setText(f"{payload['network']/1024:.0f}")
         elif kind == "hardware":
             self.metric_values["cpu"].setToolTip(payload["description"])
         elif kind == "status":
@@ -662,6 +741,7 @@ class GUIManager(QMainWindow):
         elif kind == "voice_text":
             self.handle_voice_text(payload)
         elif kind == "done":
+            self.player.finish_action()
             self.confirmation_target = None
             self.voice_panel.confirm_button.hide()
             self.voice_panel.set_state("Listo")
@@ -686,6 +766,7 @@ class GUIManager(QMainWindow):
             return
         event.ignore()
         if not self.closing:
+            self.maintenance.stop()
             self.closing = True
             self.stop()
             self.integration_cancel.set()

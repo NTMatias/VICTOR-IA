@@ -1,5 +1,16 @@
 # VICTOR.IA v2 — progreso y reanudación
 
+## V5 — entrega y pendientes explícitos
+- [x] P1: referencia Nextendo recibida, abierta y medida directamente (tabla en VERIFICACION). Hero, resumen, radios, punto 15 px y dos columnas adaptados conservando paleta. GUI real y capturas propias revisadas. No se afirma recuperar la fuente/CSS exactos del raster.
+- [x] P2 preservación: fuentes remotas, core y security idénticos a v4. Se reconoce que el usuario ya comprobó pantalla/ratón en su PC. Diagnóstico nuevo: CodexSandboxDesktop distinto de Default; MSS/ImageGrab fallan allí. Instrucciones del teléfono en README.
+- [ ] P2 experiencia completa solicitada: teclado instantáneo sin interrupciones y apertura automática al enfocar un campo NO implementados; el botón Teclado y la escritura supervisada se conservan. type_text es ALTO y requiere EJECUTAR en PC. Nueva prueba con celular no realizada por el agente.
+- [x] P3 arquitectura y pruebas: predicción/reconciliación, polling adaptativo y debounce. 0,20 ms de callback visual con API simulada en la suite final. Latencia Spotify real pendiente de cuenta en este entorno.
+- [x] P4 A: caché y descarga aislada implementadas; descarga real ~148 MB y carga/inferencia CPU sobre silencio ejecutadas. También se ejecutó el botón GUI real contra la caché ya descargada y cerró limpiamente. Descarga fría desde GUI y ensayo hablado completo pendientes de validación, no declarados probados.
+- [x] P4 B/C/D/F: wake word tolerante y aviso, presentación F11, auditoría visible, script de humo. Pruebas nuevas aprobadas; voz acústica en vivo pendiente.
+- [x] P4 E: prechequeo local y diagnóstico de conexiones en proceso aislado implementados. Botón GUI ejecutado sin credenciales, pruebas de IA simulada sin herramientas aprobadas. Consultas con cuentas autenticadas pendientes de verificación en este perfil; Gmail/Drive, micrófono y emparejamiento no se confunden con conectividad.
+- [x] Validación: 83 pruebas, compileall, imports y ventana. Sin reinstalar dependencias.
+- [x] Empaquetado v5: ZIP generado e integridad comprobada; 81 archivos, 69 módulos Python. Se excluyen data, modelos, claves y .venv. Las limitaciones pendientes anteriores permanecen explícitas.
+
 ## V4
 - [x] A/B: pestaña Tools retirada; estilos más redondeados y nombres/detalles centralizados en español. Prueba GUI anterior aprobada. Referencia visual: el adjunto disponible contiene texto; se siguió la descripción escrita de estilo.
 - [x] C: mini reproductor con consulta real y controles por registro; volumen bajo, OAuth intacto.

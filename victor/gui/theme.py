@@ -1,8 +1,8 @@
 """Tokens visuales compartidos por toda la interfaz Qt."""
 COLORS = {"background": "#0d111c", "surface": "#171e2e", "border": "#29344a", "text": "#edf2ff",
           "muted": "#9ba9c3", "accent": "#397bfa", "assistant": "#222b3b", "success": "#5fdfbf"}
-LABEL_STYLES = {"muted": "color: #9ba9c3;", "heading": "font-size: 30px; font-weight: 800;",
-                "caption": "font-size: 10px; color: #9ba9c3;", "metric": "font-size: 18px; font-weight: 600;",
+LABEL_STYLES = {"muted": "color: #9ba9c3;", "heading": "font-size: 32px; font-weight: 800;",
+                "caption": "font-size: 10px; color: #9ba9c3;", "metric": "font-size: 21px; font-weight: 700;",
                 "error": "color: #f2b7a9; font-size: 11px;"}
 
 def state_style(state):
@@ -20,6 +20,9 @@ QWidget { color: #edf2ff; font-family: 'Segoe UI Variable', 'Segoe UI'; font-siz
 QLabel { background: transparent; }
 QLabel#proactive { background: #171e2e; border: 1px solid #397bfa; border-radius: 14px; padding: 12px; }
 QFrame#card, QFrame#drawer { background: #171e2e; border: 1px solid #29344a; border-radius: 24px; }
+QFrame#hero, QFrame#overview { background: #171e2e; border: 0; border-radius: 26px; }
+QFrame#summary { background: #222b3b; border: 1px solid #29344a; border-radius: 20px; }
+QFrame#metricCard { background: #222b3b; border: 1px solid #29344a; border-radius: 14px; }
 QFrame#approval { background: #292637; border: 1px solid #806a43; border-radius: 24px; padding: 8px; }
 QFrame#player { background: #171e2e; border: 1px solid #29344a; border-radius: 24px; }
 QPushButton#compact { padding: 0; border-radius: 14px; }

@@ -22,6 +22,8 @@ class Transcriber:
             except ImportError:
                 raise VictorError("Voz local desactivada: instala faster-whisper con instalar.bat. También puedes elegir Google en Ajustes.") from None
             name = self.config.get("whisper_model")
+            from victor.voice.models import cached_model
+            name = cached_model(self.config) or name
             if self.model is None or name != self.model_name:
                 try:
                     self.model = WhisperModel(name, device="cpu", compute_type="int8", cpu_threads=max(1, min(4, (os.cpu_count() or 2)-1)),
