@@ -1,4 +1,4 @@
-"""Políticas fuera del modelo. Denegación por defecto y confirmación por acción."""
+"""Políticas fuera del modelo. Validación permanente y confirmaciones configurables."""
 from __future__ import annotations
 import logging
 import os
@@ -28,7 +28,7 @@ class Approval:
 
 
 class SecurityManager:
-    """El diálogo decide; ni mensajes, ni web, ni respuestas de IA conceden permisos."""
+    """Solo la configuración del propietario decide si hay diálogo; la IA no concede permisos."""
     BLOCKED_COMMANDS = {"cmd", "powershell", "pwsh", "wscript", "cscript", "mshta", "rundll32",
                         "reg", "regedit", "diskpart", "format", "del", "erase", "rd", "rmdir",
                         "shutdown", "bcdedit", "schtasks", "sc", "net", "msiexec", "winget", "certutil"}
@@ -53,6 +53,12 @@ class SecurityManager:
                 raise VictorError("El control remoto está bloqueado desde el PC.")
             if origin.get("source") == "telegram" and risk == Risk.HIGH and self.config.get("remote_high_policy") == "block":
                 raise VictorError("Acción de alto riesgo bloqueada por remoto. Ejecútala en el PC o habilita confirmación presencial en Ajustes.")
+        # Preferencia explícita del propietario; NO procede del modelo ni de una página.
+        # Solo omite diálogos: se conservan validación de origen, bloqueo remoto,
+        # esquemas, carpetas permitidas y lista de comandos bloqueados.
+        if not self.config.get("action_confirmations"):
+            self.log.info("confirmation result action=%s accepted=True authorization=owner_direct_mode risk=%s", title, risk.name)
+            return
         if risk == Risk.LOW and self.config.get("security") != "strict":
             return
         # v6, decisión explícita del propietario: la sesión QR autoriza la

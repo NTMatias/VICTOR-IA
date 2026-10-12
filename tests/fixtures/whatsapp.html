@@ -1,0 +1,54 @@
+<!doctype html><meta charset="utf-8"><title>WhatsApp · datos de prueba</title>
+<style>body{font:14px Arial}#side{width:320px}#main{margin-left:330px} [role=row],[role=listitem]{height:60px} [contenteditable],.selectable-text{min-height:40px;white-space:pre-wrap} .message-in,.message-out{padding:10px}</style>
+<div id="side"><button aria-label="Nuevo chat"><span data-icon="new-chat-outline"></span>Nuevo chat</button><div role="textbox" contenteditable="true" id="search"></div><div id="pane-side" role="grid"></div></div>
+<div id="main"><header><span dir="auto" title="" id="heading"></span></header><div data-testid="conversation-panel-messages" id="messages" style="height:400px;overflow:auto"></div><footer><div role="textbox" contenteditable="true" id="editor"></div><button id="send"><span data-icon="send"></span>Enviar</button></footer></div>
+<script>
+const records=[{name:'Ana de prueba 🤘',preview:'Entonces 2',time:'14:32',unread:2},
+{name:'Luis de prueba',preview:'Ya llegué.',time:'14:15',unread:0},
+{name:'Equipo de prueba',preview:'Wellington: Foto',time:'13:48',unread:1}];
+const contacts=[...records,{name:'María de prueba',preview:'',time:'',unread:0}];
+let serial=0,selected='',allMessages=new Map();
+for(const row of records)allMessages.set(row.name,[{text:row.preview,outgoing:false,id:'in-'+(++serial)}]);
+function paintMessage(message) {
+ const root=document.createElement('div');root.className=message.outgoing?'message-out':'message-in';root.dataset.id=message.id;
+ const meta=document.createElement('div');meta.dataset.prePlainText='[14:32, 11/10/2026] '+selected+': ';
+ const body=document.createElement('span');body.className='selectable-text copyable-text';body.textContent=message.text;meta.append(body);root.append(meta);
+ if(message.outgoing){const check=document.createElement('span');check.dataset.icon='msg-check';root.append(check);}
+ return root;
+}
+function open(name) {
+ selected=name;const heading=document.getElementById('heading');heading.title=name;heading.textContent=name;
+ const target=document.getElementById('messages');target.replaceChildren();for(const message of allMessages.get(name)||[])target.append(paintMessage(message));
+ document.querySelector('[data-testid=drawer-left]')?.remove();
+ document.getElementById('editor').replaceChildren();
+}
+function row(data,role='row') {
+ const root=document.createElement('div');root.setAttribute('role',role);
+ const title=document.createElement('span');title.dir='auto';title.title=data.name;title.textContent=data.name;root.append(title);
+ const time=document.createElement('span');time.dataset.testid='cell-frame-time';time.textContent=data.time;root.append(time);
+ const body=document.createElement('span');body.dataset.testid='cell-frame-secondary';body.title=data.preview;body.textContent=data.preview;root.append(body);
+ if(data.name==='Luis de prueba')body.insertAdjacentHTML('afterbegin','<svg aria-hidden="true"><title>wds-ic-read</title><path d="M0 0"></path></svg>');
+ if(data.name==='Equipo de prueba')body.innerHTML='Wellington: <span data-icon="image"><svg><title>ic-image</title></svg></span><span>Foto</span>';
+ if(data.unread){const count=document.createElement('span');count.dataset.testid='icon-unread-count';count.textContent=data.unread;body.append(count);}
+ root.onclick=event=>{window.victorFixture.lastClickTrusted=event.isTrusted;open(data.name);};return root;
+}
+function paintChats(query='') {document.getElementById('pane-side').replaceChildren(...records.filter(data=>data.name.toLowerCase().includes(query.toLowerCase())).map(data=>row(data)));}
+paintChats();
+document.getElementById('search').addEventListener('input',event=>paintChats(event.target.textContent));
+document.querySelector('[aria-label="Nuevo chat"]').onclick=()=>{
+ const drawer=document.createElement('div');drawer.dataset.testid='drawer-left';const back=document.createElement('button');const glyph=document.createElement('span');glyph.dataset.icon='back';back.append(glyph);back.onclick=()=>drawer.remove();drawer.append(back);
+ const search=document.createElement('div');search.contentEditable=true;search.setAttribute('role','textbox');drawer.append(search);
+ const list=document.createElement('div');list.dataset.testid='contact-list';drawer.append(list);
+ function populate(query=''){list.replaceChildren(...contacts.filter(data=>data.name.toLowerCase().includes(query.toLowerCase())).map(data=>row(data,'listitem')));}
+ search.addEventListener('input',()=>populate(search.textContent));populate();document.getElementById('side').append(drawer);
+};
+document.getElementById('send').onclick=()=>{
+ const editor=document.getElementById('editor');if(!selected || !editor.textContent.trim())return;
+ const value=editor.innerText;const message={text:value,outgoing:true,id:'out-'+(++serial)};const messages=allMessages.get(selected)||[];messages.push(message);allMessages.set(selected,messages);
+ document.getElementById('messages').append(paintMessage(message));editor.replaceChildren();
+ const record=records.find(data=>data.name===selected);if(record){record.preview=value;record.time='14:33';}paintChats();
+};
+window.victorFixture={receive(value){if(!selected)return;const message={text:value,outgoing:false,id:'in-'+(++serial)};
+ const messages=allMessages.get(selected)||[];messages.push(message);allMessages.set(selected,messages);document.getElementById('messages').append(paintMessage(message));
+ const record=records.find(data=>data.name===selected);if(record){record.preview=value;record.unread++;}paintChats();}};
+</script>

@@ -35,6 +35,7 @@ class LocalRemote:
         self.port=8443
         self.frames={}
         self.keyboard_workers=set()
+        self.pointer_workers=set()
         self.certificate_expiry=None
         from victor.integrations.remote_touch import register_touch
         register_touch(self)
@@ -47,7 +48,7 @@ class LocalRemote:
         core.registry.register(Tool('remote_pointer_batch','Lote de puntero remoto: desplazamientos relativos, clics y scroll sobre la ventana exacta. Revisa cada evento.',
             {'type':'object','properties':{'window':{'type':'string','minLength':1,'maxLength':300},'events':{'type':'array','items':event,'minItems':1,'maxItems':20}},
              'required':['window','events'],'additionalProperties':False},Risk.MEDIUM,self.pointer_batch))
-        core.registry.register(Tool('remote_screen_stream','Compartir el escritorio con el dispositivo local emparejado durante 60 segundos. Puede mostrar información privada.',
+        core.registry.register(Tool('remote_screen_stream','Compartir el escritorio mientras la conexión emparejada permanezca activa. Puede mostrar información privada; Detener revoca el acceso.',
              {'type':'object','properties':{},'additionalProperties':False},Risk.MEDIUM,self.start_stream))
 
     @property
@@ -73,6 +74,13 @@ class LocalRemote:
             self.sessions[token]={'peer':peer,'expires':time.monotonic()+600,'stream_until':0,'out':deque(maxlen=12)}
             return token
 
+    def keep_alive(self, origin):
+        """Una conexión activa renueva la sesión; un token caducado nunca revive."""
+        with self.lock:
+            if not self.authorized(origin): return False
+            self.sessions[origin['session']]['expires']=time.monotonic()+600
+            return True
+
     def qr_url(self):
         if not self.ready.is_set():
             raise VictorError('Espera a que el servidor HTTPS esté listo.')
@@ -92,6 +100,7 @@ class LocalRemote:
         self.stop_event.set(); self.ready.clear()
         with self.lock:
             for worker in self.keyboard_workers:worker.stop()
+            for worker in self.pointer_workers:worker.stop()
             self.sessions.clear(); self.pair_code=''; self.frames.clear()
         if getattr(self.core,'active_origin',{}):
             if self.core.active_origin.get('source')=='local_web': self.core.stop()
@@ -163,7 +172,7 @@ class LocalRemote:
 
     def create_app(self):
         from fastapi import FastAPI, WebSocket
-        from fastapi.responses import HTMLResponse
+        from fastapi.responses import HTMLResponse, FileResponse
         from contextlib import asynccontextmanager
         @asynccontextmanager
         async def lifespan(app):
@@ -172,10 +181,13 @@ class LocalRemote:
             try: yield
             finally: self.ready.clear()
         app=FastAPI(lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+        @app.get('/assets/inter.ttf')
+        async def font():
+            return FileResponse(Path(__file__).resolve().parents[1]/'gui'/'assets'/'Inter.ttf',media_type='font/ttf',headers={'Cache-Control':'public, max-age=86400'})
         @app.get('/')
         async def index():
             return HTMLResponse(PAGE,headers={'Cache-Control':'no-store','Referrer-Policy':'no-referrer',
-                'X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'"})
+                'X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'"})
         async def authenticate(ws, pairing):
             if ws.headers.get('origin')!=f'https://{self.address}:{self.port}':
                 await ws.close(code=1008); return None
@@ -201,6 +213,7 @@ class LocalRemote:
                     try: data=json.loads(await asyncio.wait_for(ws.receive_text(),.15))
                     except asyncio.TimeoutError: continue
                     if isinstance(data,dict) and data=={'type':'ping'}:
+                        self.keep_alive(origin)
                         await ws.send_json({'type':'pong'});continue
                     if time.monotonic()-stamp<.45:
                         await ws.send_json({'error':'Límite de frecuencia.','done':True});continue
@@ -237,6 +250,8 @@ class LocalRemote:
                 except Exception:pass
         from victor.integrations.keyboard_socket import install_keyboard_route
         install_keyboard_route(app,self,authenticate)
+        from victor.integrations.remote_touch import install_pointer_route
+        install_pointer_route(app,self,authenticate)
         return app
 
     def pointer_batch(self,window,events):
@@ -265,11 +280,11 @@ class LocalRemote:
             self.stream_quality=max(20,min(90,int(os.getenv('SCREEN_QUALITY','60'))))
         except ValueError:
             raise VictorError('SCREEN_FPS y SCREEN_QUALITY deben ser enteros en .env.') from None
-        with self.lock:self.sessions[origin['session']]['stream_until']=time.monotonic()+60
+        with self.lock:self.sessions[origin['session']]['stream_until']=float('inf')
         if not self.capture_thread or not self.capture_thread.is_alive():
             self.capture_thread=threading.Thread(target=self.capture_loop,name='victor-screen-stream',daemon=True)
             self.capture_thread.start()
-        return {'pantalla_autorizada_segundos':60}
+        return {'pantalla_autorizada':'Mientras la sesión conectada continúe autorizada. Detener o cerrar revoca el permiso.'}
 
     def capture_loop(self):
         fps=self.stream_fps

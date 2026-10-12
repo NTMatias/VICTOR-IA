@@ -17,7 +17,7 @@ class OpenAIProvider(BaseProvider):
         if specs:
             options["tools"] = [{"type": "function", "function": s} for s in specs]
             options["parallel_tool_calls"] = False
-        with OpenAI(api_key=os.environ["OPENAI_API_KEY"], timeout=cfg["network_timeout"], max_retries=0) as client:
+        with OpenAI(api_key=cfg.get("_api_key") or os.environ["OPENAI_API_KEY"], timeout=cfg["network_timeout"], max_retries=0) as client:
             with client.chat.completions.create(**options) as stream:
                 for chunk in stream:
                     check_cancel(cancel)

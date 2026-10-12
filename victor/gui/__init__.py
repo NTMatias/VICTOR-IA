@@ -1,1 +1,1 @@
-"""Interfaz CustomTkinter. Solo el hilo principal modifica widgets."""
+"""Interfaz Qt. Solo el hilo principal modifica widgets."""

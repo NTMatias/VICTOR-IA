@@ -1,0 +1,38 @@
+[
+  {
+    "version": "v1.0.0",
+    "archive": "VICTOR_IA.zip",
+    "original_sha256": "cb4d0932605d63557914cbe3da91d0c954d3bf9d32a4f33af73552c8360723d2",
+    "original_files": 50
+  },
+  {
+    "version": "v2.0.0",
+    "archive": "VICTOR_IA_v2.zip",
+    "original_sha256": "994e993b426e124a1a44e1ac2cdaf01aa7b85644a7af01c21156ff954f5f7721",
+    "original_files": 62
+  },
+  {
+    "version": "v3.0.0",
+    "archive": "VICTOR_IA_v3.zip",
+    "original_sha256": "34aae7e1d1ca111b88e681740dcc6d12f63e18a80296ac06f92a5ba1a9dc7589",
+    "original_files": 67
+  },
+  {
+    "version": "v4.0.0",
+    "archive": "VICTOR_IA_v4.zip",
+    "original_sha256": "3dc68453bffc31f98b64362f056c089f55acbc41d154c594bdb993297841d5d2",
+    "original_files": 78
+  },
+  {
+    "version": "v5.0.0",
+    "archive": "VICTOR_IA_v5.zip",
+    "original_sha256": "f3002fda6187db656dc76f1efee5863606d02c2b7f650b3939632e61dcbe86da",
+    "original_files": 81
+  },
+  {
+    "version": "v6.0.0",
+    "archive": "VICTOR_IA_v6.zip",
+    "original_sha256": "782cd4f1dd6978cd6146519f3bcbd19a6fb56fa5161b676c8760ac3511868655",
+    "original_files": 88
+  }
+]

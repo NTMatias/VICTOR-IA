@@ -20,12 +20,17 @@ def check_services(config, emit):
 
     cfg = config.snapshot()
     selected = cfg['provider']
-    if selected in KEYS and not os.getenv(KEYS[selected], '').strip():
+    try:
+        personal_key = config.api_key(selected)
+    except Exception:
+        personal_key = ''
+    if selected in KEYS and not personal_key:
         emit('IA', '❌ IA: falta ' + KEYS[selected])
     else:
         def ai():
             from victor.ai.manager import AIManager
             cfg.update(network_timeout=8, ollama_timeout=8, max_tokens=128)
+            if selected in KEYS:cfg['_api_key'] = personal_key
             provider = AIManager(config, lambda *_: None).providers[selected]
             response = provider.stream([{'role':'user', 'content':'Responde solamente OK.'}],
                                        'Prueba de conexión. No solicites herramientas.', [], cfg,

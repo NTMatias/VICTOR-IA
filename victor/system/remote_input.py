@@ -110,3 +110,50 @@ def send_remote(window,event,cancel,validate,binding=None,reactivate=False):
             raise VictorError('Windows no permite sintetizar Ctrl+Alt+Supr ni la tecla física de encendido mediante SendInput. Usa el teclado del PC.')
         send(chord_inputs(keys))
     return {'entrada_enviada':True}
+
+
+def send_pointer(window,x,y,action,cancel,validate):
+    """Puntero sobre la imagen real. Sin la pausa global de PyAutoGUI.
+
+    El llamante obtiene antes el permiso MEDIO de sesión. Aquí se revalida
+    antes de cada entrada y se bloquea el propio asistente/diálogos de permiso.
+    """
+    require_windows()
+    import pyautogui
+    pyautogui.FAILSAFE=True
+    user=ctypes.WinDLL('user32',use_last_error=True)
+    class POINT(ctypes.Structure): _fields_=[('x',w.LONG),('y',w.LONG)]
+    user.WindowFromPoint.argtypes=[POINT];user.WindowFromPoint.restype=w.HWND
+    user.GetAncestor.argtypes=[w.HWND,w.UINT];user.GetAncestor.restype=w.HWND
+    user.GetWindowTextW.argtypes=[w.HWND,w.LPWSTR,ctypes.c_int]
+    user.GetWindowThreadProcessId.argtypes=[w.HWND,ctypes.POINTER(w.DWORD)]
+    user.GetAsyncKeyState.argtypes=[ctypes.c_int];user.GetAsyncKeyState.restype=ctypes.c_short
+    user.SetCursorPos.argtypes=[ctypes.c_int,ctypes.c_int];user.SetCursorPos.restype=w.BOOL
+    user.SendInput.argtypes=[w.UINT,ctypes.POINTER(INPUT),ctypes.c_int];user.SendInput.restype=w.UINT
+    validate();check_cancel(cancel);pyautogui.failSafeCheck()
+    if any(user.GetAsyncKeyState(vk)&0x8000 for vk in (0x10,0x11,0x12,0x5b,0x5c)):
+        raise VictorError('Suelta los modificadores físicos antes de controlar el ratón.')
+    hwnd=user.GetAncestor(user.WindowFromPoint(POINT(x,y)),2)
+    title=ctypes.create_unicode_buffer(512);user.GetWindowTextW(hwnd,title,len(title))
+    pid=w.DWORD();user.GetWindowThreadProcessId(hwnd,ctypes.byref(pid))
+    import os
+    if pid.value==os.getpid() or 'VICTOR.IA' in title.value:
+        raise VictorError('El remoto no puede pulsar VICTOR ni aprobar sus propios diálogos. Usa el PC para autorizar.')
+    if window!='Escritorio completo' and title.value!=window:
+        raise VictorError('La posición está fuera de la ventana autorizada. Elige Escritorio completo para controlar todo el PC.')
+    if action not in ('move','click','up','down'):
+        raise VictorError('Acción de puntero inválida.')
+    validate();check_cancel(cancel)
+    if not user.SetCursorPos(x,y): raise VictorError('Windows no permitió mover el puntero.')
+    actual=POINT();user.GetCursorPos.argtypes=[ctypes.POINTER(POINT)];user.GetCursorPos(ctypes.byref(actual))
+    if (actual.x,actual.y)!=(x,y) and action!='move':
+        raise VictorError('La posición está fuera de un monitor activo. No se enviará el clic ni scroll.')
+    flags=[(0x0002,0),(0x0004,0)] if action=='click' else [(0x0800,120 if action=='up' else -120)] if action in ('up','down') else []
+    if flags:
+        validate();check_cancel(cancel)
+        events=(INPUT*len(flags))(*[INPUT(0,UNION(mi=MOUSEINPUT(0,0,amount & 0xffffffff,flag,0,0))) for flag,amount in flags])
+        if user.SendInput(len(events),events,ctypes.sizeof(INPUT))!=len(events):
+            if action=='click':
+                release=INPUT(0,UNION(mi=MOUSEINPUT(0,0,0,0x0004,0,0)));user.SendInput(1,ctypes.byref(release),ctypes.sizeof(INPUT))
+            raise VictorError('Windows bloqueó la entrada. No se repetirá el clic.')
+    return {'window':title.value,'owner':str(hwnd),'puntero_enviado':True}

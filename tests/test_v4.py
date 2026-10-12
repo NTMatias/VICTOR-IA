@@ -37,7 +37,7 @@ class V4(unittest.TestCase):
         app=GUIManager(self.cfg)
         try:
             self.assertEqual(set(app.core.registry.tools)-set(LABELS),set())
-            self.assertNotIn('Tools',[app.tabs.tabText(i) for i in range(app.tabs.count())])
+            self.assertNotIn('Tools',[w.text() for w in app.nav_buttons.values()])
         finally:
             app.close()
             for _ in range(50):
@@ -70,17 +70,17 @@ class V4(unittest.TestCase):
             self.assertFalse(request.done.is_set())
             app.listen_approval()
             self.assertTrue(app.voice_confirmation_active())
-            app.handle_voice_text('confirmar', request)
+            app.handle_voice_text('ejecutar', request)
             self.assertTrue(request.accepted)
             self.assertFalse(app.voice_confirmation_active())
             other=Approval('move_file','Mover',Risk.MEDIUM)
             app.handle_event('approval',other)
             with patch.object(app,'send') as send:
                 app.handle_voice_text('sí')
-                send.assert_called_once_with('sí')
+                send.assert_called_once_with('sí',voice=True)
             self.assertFalse(other.done.is_set())
             app.player.update_state({'id':'test','name':'Tema de prueba','artists':'Ejemplo','playing':False,'volume':30,'art':b''})
-            self.assertEqual(app.player.play.text(),'▶')
+            self.assertEqual(app.player.play.accessibleName(),'Reproducir')
             app.player.dismiss();self.assertTrue(app.player.isHidden())
         finally:
             app.close()

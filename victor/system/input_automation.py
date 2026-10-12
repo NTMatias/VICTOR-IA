@@ -13,6 +13,11 @@ class InputAutomation:
         from victor.system.remote_input import send_remote
         return send_remote(window, event, cancel, validate, binding, reactivate)
 
+    def remote_pointer(self, window, x, y, action, cancel, validate):
+        """Entrada LAN fluida sin activate/wait/PAUSE por cada movimiento."""
+        from victor.system.remote_input import send_pointer
+        return send_pointer(window,x,y,action,cancel,validate)
+
     def prepare(self, window):
         require_windows()
         import pyautogui

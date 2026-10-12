@@ -13,22 +13,30 @@ PROVIDERS = ("OpenAI", "Anthropic", "Gemini", "Ollama")
 KEYS = {"OpenAI": "OPENAI_API_KEY", "Anthropic": "ANTHROPIC_API_KEY", "Gemini": "GEMINI_API_KEY"}
 DEFAULTS = {
     "provider": "OpenAI",
+    "auth_methods": {"OpenAI": "api", "Gemini": "api"},
+    "account_models": {"OpenAI": "", "Gemini": "auto"},
+    "gemini_account_enabled": False,
     "models": {"OpenAI": "gpt-4.1-mini", "Anthropic": "claude-sonnet-4-20250514",
-               "Gemini": "gemini-2.5-flash", "Ollama": "qwen2.5:7b"},
+               "Gemini": "gemini-3.8-flash", "Ollama": "qwen2.5:7b"},
     "fallback": [], "temperature": 0.5, "max_tokens": 2048,
     "name": "VICTOR.IA", "personality": "Atento, preciso, práctico y con humor discreto.",
     "formality": "Profesional y cercano", "language": "es-EC",
     "system_prompt": "Responde con concisión salvo que el usuario pida detalle.",
-    "theme": "Dark", "security": "normal", "voice_enabled": False,
+    "theme": "Dark", "security": "normal", "action_confirmations": True, "voice_enabled": False,
     "voice_id": "", "voice_rate": 175, "voice_mode": "manual",
     "voice_backend": "whisper", "whisper_model": "base", "wake_word": "VICTOR",
+    "openai_transcription_model": "gpt-transcribe",
+    "voice_background_listening": False,
+    "voice_noise_reduction": True, "voice_echo_cancellation": True, "voice_noise_level": "moderado",
     "microphone": "", "vision_provider": "OpenAI", "vision_model": "gpt-4.1-mini",
     "ollama_url": "http://127.0.0.1:11434", "context_chars": 24000,
     "allowed_folders": [str(ROOT / "workspace")], "applications": {},
     "auto_search": True, "network_timeout": 30,
     "ollama_light": False, "ollama_keep_alive": "5m", "ollama_timeout": 180,
     "ollama_gpu": "auto", "ollama_context": 4096,
-    "tts_backend": "edge", "edge_voice": "es-EC-LuisNeural", "conversation_window": 45,
+    "tts_backend": "edge", "edge_voice": "es-MX-JorgeNeural", "conversation_window": 45,
+    "voice_vocabulary": "VICTOR, Victoria, Spotify, Google, Chrome",
+    "voice_corrections": "",
     "telegram_enabled": False, "telegram_allowed_ids": [], "telegram_paused": False,
     "remote_block_all": False, "remote_high_policy": "block", "remote_rate_limit": 6,
     "local_remote_enabled": False,
@@ -47,11 +55,17 @@ class ConfigManager:
         self.data = copy.deepcopy(DEFAULTS)
         self.data["allowed_folders"] = [str(root / "workspace")]
         self.warning = ""
+        from victor.credentials import CredentialStore
+        self.credentials = CredentialStore(self.data_dir / "ai_keys.dpapi")
         if self.path.exists():
             try:
                 saved = json.loads(self.path.read_text(encoding="utf-8"))
                 candidate = copy.deepcopy(self.data)
                 candidate.update({k: v for k, v in saved.items() if k in DEFAULTS})
+                # Retire Google-account login without resetting unrelated preferences.
+                if isinstance(candidate.get('auth_methods'), dict):
+                    candidate['auth_methods']['Gemini'] = 'api'
+                candidate['gemini_account_enabled'] = False
                 self.validate(candidate)
                 self.data = candidate
             except (ValueError, OSError, TypeError, VictorError):
@@ -67,6 +81,15 @@ class ConfigManager:
 
     @staticmethod
     def validate(d):
+        if not isinstance(d['auth_methods'], dict) or d['auth_methods'].get('OpenAI') not in ('api','account') or d['auth_methods'].get('Gemini') != 'api':
+            raise VictorError('Método de conexión de IA inválido.')
+        if not isinstance(d['account_models'], dict) or any(not isinstance(d['account_models'].get(p),str) or len(d['account_models'][p])>200 for p in ('OpenAI','Gemini')):
+            raise VictorError('Modelo de cuenta inválido.')
+        import re
+        if any(d['account_models'][p] and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:/-]*',d['account_models'][p]) for p in ('OpenAI','Gemini')):
+            raise VictorError('El identificador de modelo de cuenta no es válido.')
+        if d['gemini_account_enabled'] is not False:
+            raise VictorError('Gemini solo admite conexión mediante API key.')
         if d["provider"] not in PROVIDERS or d["vision_provider"] not in PROVIDERS:
             raise VictorError("Proveedor no válido.")
         if not isinstance(d["fallback"], list) or any(p not in PROVIDERS for p in d["fallback"]):
@@ -85,12 +108,19 @@ class ConfigManager:
                 raise VictorError(f"Valor inválido: {k}.")
         if not d["wake_word"].strip():
             raise VictorError("La palabra de activación no puede estar vacía.")
+        for key in ("voice_vocabulary", "voice_corrections"):
+            if not isinstance(d[key], str) or len(d[key]) > 4000:
+                raise VictorError("El vocabulario de voz debe tener como máximo 4000 caracteres.")
+        from victor.voice.text import correction_pairs
+        correction_pairs(d["voice_corrections"])
         choices = {"theme": ("Dark", "Light", "System"), "security": ("normal", "strict"),
-                   "voice_mode": ("manual", "push-to-talk", "continua"), "voice_backend": ("google", "whisper")}
+                   "voice_mode": ("manual", "push-to-talk", "continua"), "voice_backend": ("google", "whisper", "openai"),
+                   "openai_transcription_model": ("gpt-transcribe", "gpt-4o-transcribe", "gpt-4o-mini-transcribe")}
+        choices['voice_noise_level']=('suave','moderado','intenso')
         for k, allowed in choices.items():
             if d[k] not in allowed:
                 raise VictorError(f"Valor inválido: {k}.")
-        for k in ("auto_search", "voice_enabled"):
+        for k in ("auto_search", "voice_enabled", "action_confirmations", "voice_background_listening",'voice_noise_reduction','voice_echo_cancellation'):
             if not isinstance(d[k], bool):
                 raise VictorError(f"{k} debe ser verdadero o falso.")
         if not isinstance(d["ollama_light"], bool) or d["ollama_gpu"] not in ("auto", "cpu"):
@@ -104,8 +134,11 @@ class ConfigManager:
             raise VictorError("Los IDs de Telegram deben ser enteros positivos en una lista JSON.")
         if d["remote_high_policy"] not in ("block", "pc") or type(d["remote_rate_limit"]) is not int or not 1 <= d["remote_rate_limit"] <= 20:
             raise VictorError("Política o límite remoto inválidos.")
-        if not isinstance(d["conversation_window"], int) or not 0 <= d["conversation_window"] <= 180:
+        if type(d["conversation_window"]) is not int or not 0 <= d["conversation_window"] <= 180:
             raise VictorError("La ventana de conversación debe estar entre 0 y 180 segundos.")
+        import re
+        if d['microphone'].strip() and not re.fullmatch(r'\d{1,5}',d['microphone'].strip()):
+            raise VictorError('Micrófono: usa un índice no negativo o déjalo vacío para el predeterminado.')
         if not isinstance(d["ollama_timeout"], int) or not 30 <= d["ollama_timeout"] <= 600:
             raise VictorError("Timeout Ollama: entre 30 y 600 segundos.")
         if not isinstance(d["ollama_context"], int) or not 2048 <= d["ollama_context"] <= 16384:
@@ -139,4 +172,14 @@ class ConfigManager:
             self.data = candidate
 
     def credentials_status(self):
-        return {p: bool(os.environ.get(k, "").strip()) for p, k in KEYS.items()}
+        return {p: bool(self.api_key(p)) for p in KEYS}
+
+    def api_key(self, provider):
+        if provider not in KEYS:
+            return ""
+        return self.credentials.get(provider) or os.environ.get(KEYS[provider], "").strip()
+
+    def credential_source(self, provider):
+        if self.credentials.get(provider):
+            return "Clave personal guardada · cifrada en Windows"
+        return "Clave desde .env / entorno" if os.environ.get(KEYS[provider], "").strip() else "Sin clave configurada"

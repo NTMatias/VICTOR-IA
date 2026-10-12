@@ -36,13 +36,16 @@ for %%P in ("mss>=9,<11" "pyautogui>=0.9.54,<1" "pygetwindow>=0.0.9,<1" "pyttsx3
     )
 )
 if not exist ".env" copy ".env.example" ".env" >nul
+.venv\Scripts\python.exe tools\build_webview2.py
+if errorlevel 1 goto fallo
 .venv\Scripts\python.exe -m compileall -q main.py victor
 if errorlevel 1 goto fallo
 .venv\Scripts\python.exe -c "from victor.gui.app import GUIManager; from victor.config import ConfigManager; print('Imports principales correctos.')"
 if errorlevel 1 goto fallo
 echo.
 echo Instalacion finalizada. Ejecuta iniciar.bat.
-echo Para IA online edita .env y agrega tu clave. Para IA local configura Ollama.
+echo Configura tus claves o cuenta ChatGPT elegible en Ajustes. Gemini usa solo API key.
+echo Para los agentes y sus requisitos adicionales consulta README.md.
 if "%VICTOR_OPTIONAL_FAILED%"=="1" echo Algunas funciones opcionales no se instalaron. Consulta los avisos anteriores.
 pause
 exit /b 0

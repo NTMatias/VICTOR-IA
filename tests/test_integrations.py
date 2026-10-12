@@ -101,13 +101,14 @@ class Integrations(unittest.TestCase):
         client = Mock()
         client.current_user.return_value = {"product": "premium"}
         client.devices.return_value = {"devices": [{"type": "Computer", "is_active": True, "id": "pc"}]}
-        client.search.return_value = {"tracks": {"items": [{"uri": "spotify:track:1", "name": "DTMF"}]}}
-        client.current_playback.return_value = {"is_playing": True, "item": {"name": "DTMF", "uri": "spotify:track:1", "artists": []}}
+        client.search.return_value = {"tracks": {"items": [{"uri": "spotify:track:AAAAAAAAAAAAAAAAAAAAAA", "name": "DTMF"}]}}
+        client.current_playback.return_value = {"is_playing": True, "item": {"name": "DTMF", "uri": "spotify:track:AAAAAAAAAAAAAAAAAAAAAA", "artists": []}}
         with patch.object(self.core.spotify, "client", return_value=client), patch("victor.integrations.spotify.time.sleep"):
             result = self.core.spotify.play("DTMF")
         self.assertTrue(result["confirmada"])
-        client.start_playback.assert_called_once_with(device_id="pc", uris=["spotify:track:1"])
+        client.start_playback.assert_called_once_with(device_id="pc", uris=["spotify:track:AAAAAAAAAAAAAAAAAAAAAA"])
         client.current_user.return_value = {"product": "free"}
+        self.core.spotify._premium_until = 0  # Fuerza la revisión tras vencer la caché breve.
         with self.assertRaises(SpotifyUnavailable):
             self.core.spotify.device(client)
 

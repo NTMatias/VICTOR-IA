@@ -40,7 +40,7 @@ class AnthropicProvider(BaseProvider):
                        max_tokens=cfg["max_tokens"], temperature=min(cfg["temperature"], 1))
         if specs:
             options["tools"] = [{"name": s["name"], "description": s["description"], "input_schema": s["parameters"]} for s in specs]
-        with Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"], timeout=cfg["network_timeout"], max_retries=0) as client:
+        with Anthropic(api_key=cfg.get("_api_key") or os.environ["ANTHROPIC_API_KEY"], timeout=cfg["network_timeout"], max_retries=0) as client:
             with client.messages.stream(**options) as stream:
                 for text in stream.text_stream:
                     check_cancel(cancel)

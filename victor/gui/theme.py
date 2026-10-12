@@ -1,59 +1,85 @@
-"""Tokens visuales compartidos por toda la interfaz Qt."""
-COLORS = {"background": "#0d111c", "surface": "#171e2e", "border": "#29344a", "text": "#edf2ff",
-          "muted": "#9ba9c3", "accent": "#397bfa", "assistant": "#222b3b", "success": "#5fdfbf"}
-LABEL_STYLES = {"muted": "color: #9ba9c3;", "heading": "font-size: 32px; font-weight: 800;",
-                "caption": "font-size: 10px; color: #9ba9c3;", "metric": "font-size: 21px; font-weight: 700;",
-                "error": "color: #f2b7a9; font-size: 11px;"}
-
-def state_style(state):
-    color = {"Listo": COLORS["success"], "Escuchando": COLORS["accent"], "Pensando": "#e9bd69", "Respondiendo": "#79a9ff", "Error": "#ef7d87", "Desconectado": "#ef7d87"}.get(state, COLORS["muted"])
-    return LABEL_STYLES["metric"] + "color: " + color + ";"
-
-def bubble_style(role):
-    return "QFrame {border: 0; border-radius: 24px; background: " + (COLORS["accent"] if role == "user" else COLORS["assistant"]) + ";}"
-
-def theme_style(theme):
-    return STYLE if theme != "Light" else STYLE.replace("#0d111c", "#e8edf6").replace("#171e2e", "#f3f6fd").replace("#edf2ff", "#182238")
-STYLE = '''
-QMainWindow, QWidget#root { background: #0d111c; color: #edf2ff; }
-QWidget { color: #edf2ff; font-family: 'Segoe UI Variable', 'Segoe UI'; font-size: 13px; }
-QLabel { background: transparent; }
-QLabel#proactive { background: #171e2e; border: 1px solid #397bfa; border-radius: 14px; padding: 12px; }
-QFrame#card, QFrame#drawer { background: #171e2e; border: 1px solid #29344a; border-radius: 24px; }
-QFrame#hero, QFrame#overview { background: #171e2e; border: 0; border-radius: 26px; }
-QFrame#summary { background: #222b3b; border: 1px solid #29344a; border-radius: 20px; }
-QFrame#metricCard { background: #222b3b; border: 1px solid #29344a; border-radius: 14px; }
-QFrame#approval { background: #292637; border: 1px solid #806a43; border-radius: 24px; padding: 8px; }
-QFrame#player { background: #171e2e; border: 1px solid #29344a; border-radius: 24px; }
-QPushButton#compact { padding: 0; border-radius: 14px; }
-QLabel#secondary { color: #9ba9c3; }
-QLabel#cover { background: #222b3b; border-radius: 14px; font-size: 30px; }
-QPushButton#voiceMic { background: #397bfa; border: 0; border-radius: 55px; font-size: 42px; }
-QSlider::groove:horizontal { height: 6px; background: #29344a; border-radius: 3px; }
-QSlider::sub-page:horizontal { background: #397bfa; border-radius: 3px; }
-QSlider::handle:horizontal { background: #edf2ff; width: 14px; margin: -4px 0; border-radius: 7px; }
-QPushButton { background: #222c40; border: 1px solid #303c55; border-radius: 14px; padding: 10px 13px; }
-QPushButton:hover { background: #2b3b58; }
-QPushButton:disabled { color: #6d7990; }
-QPushButton#primary { background: #397bfa; border: 0; }
-QPushButton#mic { border-radius: 26px; background: #397bfa; font-size: 22px; }
-QLineEdit, QPlainTextEdit, QListWidget { background: #101725; border: 1px solid #303c55; border-radius: 9px; padding: 7px; }
-QComboBox { background: #222c40; border-radius: 7px; padding: 7px; }
-QComboBox QAbstractItemView { background: #171e2e; selection-background-color: #397bfa; }
-QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: 0; }
-QScrollBar:vertical { background: #111827; width: 7px; border-radius: 3px; }
-QScrollBar::handle:vertical { background: #39465f; border-radius: 3px; min-height: 25px; }
-QTabWidget::pane { border: 0; } QTabBar::tab { background: #171e2e; padding: 8px; }
-QTabBar::tab:selected { color: #76a8ff; border-bottom: 2px solid #397bfa; }
-QDialog, QMessageBox { background: #171e2e; }
-QToolTip { background: #222c40; color: white; }
-'''
-
-
+"""Diseño Grafito: colores y medidas del paquete visual del propietario."""
+from pathlib import Path
+COLORS = {"background": "#111318", "surface": "#1D2027", "border": "#30333E", "text": "#E9EAF1",
+          "muted": "#9196A5", "accent": "#83AFFF", "assistant": "#22252E", "success": "#68CCA4"}
+LABEL_STYLES = {"muted": "color: #9196A5;", "heading": "font-size: 29px; font-weight: 650;",
+                "caption": "font-size: 11px; color: #9196A5;", "metric": "font-size: 21px; font-weight: 600;",
+                "error": "color: #F28F95; font-size: 12px;"}
+def load_fonts():
+    from PySide6.QtGui import QFontDatabase
+    for name in ("Inter.ttf", "IBMPlexMono.ttf"):
+        QFontDatabase.addApplicationFont(str(Path(__file__).parent / "assets" / name))
 def title_font():
-    from PySide6.QtGui import QFont, QFontDatabase
-    installed=set(QFontDatabase.families())
-    family=next((f for f in ('Nunito','Rubik','Segoe UI Variable','Segoe UI') if f in installed),'Arial')
-    font=QFont(family,22)
-    font.setWeight(QFont.Weight.ExtraBold)
-    return font
+    from victor.gui.typography import ui_font
+    return ui_font(29,True)
+def state_style(state):
+    color = {"Listo": COLORS["success"], "Escuchando": COLORS["accent"], "Pensando": "#E9BE72",
+             "Respondiendo": "#83AFFF", "Error": "#F28F95", "Desconectado": "#F28F95"}.get(state, COLORS["muted"])
+    return "color: " + color + "; font-size: 12px;"
+def bubble_style(role, light=False):
+    background=("#DCE6F4" if role=="user" else "#F2F4F8") if light else ("#283243" if role=="user" else "#22252E")
+    return "QFrame {border: 1px solid "+("#D2D8E3" if light else "#30333E")+"; border-radius: 11px; background: "+background+";} QLabel {border: 0; background: transparent; color: "+("#20242F" if light else "#E9EAF1")+";}"
+def is_light(theme):
+    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtCore import Qt
+    return theme == "Light" or (theme == "System" and QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Light)
+def theme_style(theme):
+    if not is_light(theme): return STYLE
+    style = STYLE
+    for old, new in {"#111318":"#EEF0F5", "#15171C":"#F6F7FA", "#16181E":"#F6F7FA", "#191C22":"#F8F9FC",
+                     "#1D2027":"#FFFFFF", "#22252E":"#F2F4F8", "#252A34":"#E1E7F1", "#30333E":"#D2D8E3",
+                     "#E9EAF1":"#20242F", "#9196A5":"#616B7D", "#B8BCC8":"#475266",
+                     "#303745":"#D6E0EF"}.items(): style = style.replace(old, new)
+    return style
+STYLE = r"""
+QMainWindow, QWidget#outer { background: #111318; color: #E9EAF1; }
+QWidget { color: #E9EAF1; font-family: 'Segoe UI', 'Noto Sans', Arial; font-size: 14px; }
+QWidget#shell, QWidget#root, QWidget#pageBody { background: #15171C; }
+QFrame#sidebar { background: #15171C; border: 1px solid #30333E; border-top-left-radius: 16px; border-bottom-left-radius: 16px; }
+QFrame#header { background: #191C22; border-bottom: 1px solid #30333E; border-top-right-radius: 16px; }
+QFrame#card, QFrame#player, QFrame#chatFrame { background: #1D2027; border: 1px solid #30333E; border-radius: 12px; }
+QFrame#approval { background: #22252E; border: 1px solid #776342; border-radius: 12px; }
+QFrame#composer { background: #22252E; border: 1px solid #30333E; border-radius: 12px; }
+QLabel { background: transparent; border: 0; }
+QLabel#secondary, QLabel#caption { color: #9196A5; }
+QLabel#sectionTitle { font-size: 29px; font-weight: 650; }
+QLabel#cardTitle { font-size: 14px; font-weight: 600; }
+QLabel#badge { color: #68CCA4; background: #21372F; border: 1px solid #315746; padding: 5px 10px; border-radius: 12px; font-size: 11px; }
+QLabel#proactive { color: #9196A5; }
+QPushButton { background: #22252E; border: 1px solid #30333E; border-radius: 8px; padding: 9px 14px; min-height: 16px; }
+QPushButton:hover { background: #252A34; border-color: #627899; }
+QPushButton:pressed, QPushButton:checked { background: #303745; border-color: #83AFFF; }
+QPushButton:disabled { color: #686D7A; }
+QPushButton#primary { background: #588AD8; border: 1px solid #749DE1; color: white; }
+QPushButton#danger { color: #F28F95; background: #35262B; border-color: #70434C; }
+QPushButton#nav { text-align: left; border: 0; background: transparent; border-radius: 9px; padding: 13px 16px; color: #B8BCC8; }
+QPushButton#nav:checked { background: #252A34; color: #E9EAF1; border-left: 2px solid #83AFFF; }
+QPushButton#nav:hover { background: #22252E; }
+QPushButton#compact { padding: 4px 7px; }
+QPushButton#mic { border-radius: 8px; }
+QPushButton#voiceMic { background: #252A34; border: 1px solid #30333E; border-radius: 60px; }
+QLineEdit, QPlainTextEdit, QListWidget, QSpinBox, QDoubleSpinBox { background: #16181E; border: 1px solid #30333E; border-radius: 8px; padding: 8px 11px; selection-background-color: #588AD8; }
+QLineEdit { min-height: 18px; }
+QComboBox { background: #16181E; border: 1px solid #30333E; border-radius: 8px; padding: 8px 11px; min-height: 18px; }
+QComboBox QAbstractItemView { background: #1D2027; color: #E9EAF1; selection-background-color: #303745; }
+QComboBox::drop-down { border: 0; width: 25px; }
+QListWidget::item { padding: 15px; border-bottom: 1px solid #30333E; border-radius: 8px; }
+QListWidget::item:selected { background: #283243; border: 1px solid #455876; }
+QCheckBox { spacing: 10px; padding: 4px 0; }
+QCheckBox::indicator { width: 28px; height: 16px; border-radius: 8px; background: #464B57; }
+QCheckBox::indicator:checked { background: #588AD8; border: 3px solid #83AFFF; }
+QSlider::groove:horizontal { height: 4px; background: #373C48; border-radius: 2px; }
+QSlider::sub-page:horizontal { background: #83AFFF; border-radius: 2px; }
+QSlider::handle:horizontal { background: #C4DCFF; border: 3px solid #588AD8; width: 14px; height: 14px; margin: -7px 0; border-radius: 9px; }
+QProgressBar { border: 0; border-radius: 3px; background: #30333E; text-align: center; }
+QProgressBar::chunk { background: #83AFFF; border-radius: 3px; }
+QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: 0; }
+QScrollBar:vertical { width: 6px; background: transparent; }
+QScrollBar::handle:vertical { background: #464B57; border-radius: 3px; min-height: 28px; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QTabWidget::pane { border: 0; }
+QTabBar::tab { background: #191C22; color: #9196A5; padding: 9px 15px; margin-right: 1px; border-radius: 6px; }
+QTabBar::tab:selected { background: #303745; color: #E9EAF1; }
+QDialog, QMessageBox { background: #1D2027; }
+QToolTip { background: #22252E; color: #E9EAF1; border: 1px solid #30333E; padding: 5px; }
+"""

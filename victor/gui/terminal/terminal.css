@@ -1,0 +1,4 @@
+html,body{height:100%;width:100%;margin:0;background:#1d2027;overflow:hidden}
+#terminal{height:100%;width:100%;box-sizing:border-box;padding:16px}
+.xterm{font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
+.xterm .xterm-viewport{scrollbar-color:#464b57 transparent;scrollbar-width:thin}

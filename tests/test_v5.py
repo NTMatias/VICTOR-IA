@@ -54,7 +54,7 @@ class V5(unittest.TestCase):
                 return 'frase sin activación'
             heard.calls = 0
             with patch.object(voice, 'listen', side_effect=heard):voice._run()
-            self.assertTrue(any(args[0][0] == 'notice' for args in emit.call_args_list))
+            self.assertFalse(any(args[0][0] in ('notice','voice_text','voice_wake') for args in emit.call_args_list))
 
     def test_cache_detects_incomplete_and_local(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -84,17 +84,29 @@ class V5(unittest.TestCase):
                 app.show();pump(.1)
                 app.toggle_presentation();self.assertTrue(app.menu.isHidden())
                 app.toggle_presentation();self.assertFalse(app.menu.isHidden())
-                app.send=Mock()
+                # Aislar el estado de prueba del polling sin cuenta de este perfil.
+                app.spotify_poller.stop_event.set();app.spotify_poller.thread.join(1);pump(.1)
+                app.spotify_command=Mock(return_value=True)
                 player=app.player
                 player.update_state(dict(id='test', name='Pista de prueba', artists='Fixture', playing=True,volume=20, art=b''))
                 start=time.perf_counter();player.action('toggle');latency=(time.perf_counter()-start)*1000
-                self.assertEqual(player.play.text(),'▶');self.assertTrue(player.pending)
+                self.assertEqual(player.play.accessibleName(),'Reproducir');self.assertTrue(player.pending)
+                self.assertEqual(app.sections.spotify_play.accessibleName(),'Reproducir')
+                self.assertEqual(player.pending,'spotify_pause')
                 player.update_state(dict(player.state,playing=True));self.assertFalse(player.state['playing'])
                 player.reconcile('spotify_pause', {'ok':False});self.assertTrue(player.state['playing'])
-                app.send.reset_mock()
+                app.spotify_command.reset_mock()
                 for n in range(30,70):player.volume.setValue(n)
-                self.assertFalse(app.send.called);pump(.4)
-                app.send.assert_called_once_with('🎵 Spotify: ajustar volumen', ('spotify_volume', {'level':69}))
+                self.assertFalse(app.spotify_command.called);pump(.2)
+                app.spotify_command.assert_called_once_with('spotify_volume', {'level':69})
+                # Un snapshot anterior no debe hacer retroceder el volumen local.
+                old=dict(player.state,volume=20)
+                player.update_state(old);app.sections.spotify_state(old)
+                self.assertEqual(player.volume.value(),69)
+                self.assertEqual(app.sections.spotify_volume.value(),69)
+                player.reconcile('spotify_volume',{'ok':True,'result':{'nivel_solicitado':69,'aceptada_por_api':True}})
+                player.update_state(old);self.assertEqual(player.volume.value(),69)
+                player.update_state(dict(old,volume=69));self.assertIsNone(player.volume_intent)
                 print(f'V5 visual optimistic callback: {latency:.2f} ms (API simulada)')
                 app.maintenance.ready=False
                 app.start_mic();self.assertFalse(app.voice_input.running)

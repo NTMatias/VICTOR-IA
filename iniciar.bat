@@ -7,8 +7,8 @@ if not exist ".venv\Scripts\python.exe" (
     pause
     exit /b 1
 )
-call .venv\Scripts\activate.bat
-python main.py %*
+rem Usar este entorno directamente: activate.bat puede conservar una ruta antigua.
+"%~dp0.venv\Scripts\python.exe" "%~dp0main.py" %*
 if errorlevel 1 (
     echo.
     echo VICTOR.IA no pudo arrancar. Revisa el mensaje anterior y data\victor.log.

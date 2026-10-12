@@ -80,18 +80,18 @@ class GoogleManager:
         for item in result.get('messages',[]):
             msg=self.request('GET',base+'/'+item['id'],params={'format':'metadata','metadataHeaders':['Subject','From','Date']})
             headers={h['name'].lower():h['value'] for h in msg.get('payload',{}).get('headers',[])}
-            rows.append({'asunto':headers.get('subject','Sin asunto'),'remitente':headers.get('from',''), 'resumen':msg.get('snippet','')})
+            rows.append({'asunto':headers.get('subject','Sin asunto'),'remitente':headers.get('from',''), 'resumen':msg.get('snippet',''), 'fecha':headers.get('date',''), 'id':item['id'], 'thread_id':msg.get('threadId',item['id'])})
         return {'correos_no_leidos':rows, 'limite':5}
 
     def events(self):
         data=self.request('GET','https://www.googleapis.com/calendar/v3/calendars/primary/events',params={
             'timeMin':datetime.now(timezone.utc).isoformat(), 'singleEvents':'true','orderBy':'startTime','maxResults':10})
-        return {'eventos':[{'titulo':e.get('summary','Sin título'),'inicio':e.get('start',{}).get('dateTime',e.get('start',{}).get('date'))} for e in data.get('items',[])]}
+        return {'eventos':[{'titulo':e.get('summary','Sin título'),'inicio':e.get('start',{}).get('dateTime',e.get('start',{}).get('date')), 'todo_el_dia':'date' in e.get('start',{}), 'lugar':e.get('location',''), 'url':e.get('htmlLink')} for e in data.get('items',[])]}
 
     def files(self, query):
         escaped=query.replace('\\','\\\\').replace("'","\\'")
         data=self.request('GET','https://www.googleapis.com/drive/v3/files',params={
-            'q':f"trashed = false and name contains '{escaped}'",'pageSize':20,'fields':'files(id,name,webViewLink,mimeType)'})
+            'q':f"trashed = false and name contains '{escaped}'",'pageSize':20,'fields':'files(id,name,webViewLink,mimeType,modifiedTime,size)'})
         return {'archivos':data.get('files',[])}
 
     def send_email(self, to, subject, body):
