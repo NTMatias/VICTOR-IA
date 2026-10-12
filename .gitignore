@@ -1,0 +1,38 @@
+# Local credentials, profiles, conversations and work
+.env
+.env.*
+!.env.example
+data/
+workspace/
+*.dpapi
+*.oauth
+*.sqlite*
+*.db
+*.pem
+*.key
+*.pfx
+*.log
+# Dependencies and generated releases
+.venv/
+venv/
+node_modules/
+runtime/
+build/
+dist/
+releases/
+*.zip
+*.nupkg
+*.exe
+*.dll
+*.pyd
+# Python, editor and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.cache/
+.DS_Store
+Thumbs.db

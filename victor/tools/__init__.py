@@ -1,0 +1,1 @@
+"""Registro central de herramientas."""
