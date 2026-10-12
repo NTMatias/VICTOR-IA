@@ -55,6 +55,14 @@ class SecurityManager:
                 raise VictorError("Acción de alto riesgo bloqueada por remoto. Ejecútala en el PC o habilita confirmación presencial en Ajustes.")
         if risk == Risk.LOW and self.config.get("security") != "strict":
             return
+        # v6, decisión explícita del propietario: la sesión QR autoriza la
+        # escritura LAN ordinaria (MEDIO). Capability creada por el servidor,
+        # validada en local_authorizer en cada evento. No aplica a herramientas
+        # locales/Telegram, al ratón, ni a ningún atajo clasificado ALTO.
+        if (title == 'remote_keyboard_input' and risk == Risk.MEDIUM and origin
+                and origin.get('source') == 'local_web' and origin.get('keyboard_channel')):
+            self.log.info('confirmation result action=remote_keyboard_input accepted=True authorization=paired_keyboard risk=MEDIUM')
+            return
         request = Approval(title, details, risk)
         request.origin = origin
         self.log.info("confirmation requested action=%s risk=%s", title, risk.name)

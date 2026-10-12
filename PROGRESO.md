@@ -1,5 +1,15 @@
 # VICTOR.IA v2 — progreso y reanudación
 
+## V6 — solo control remoto
+- [x] A: teclado incremental/Unicode, IME al confirmar composición, teclas especiales, serialización y ACK; detección de elemento editable y botón de foco HTML. Implementación terminada; entrada real/apertura del teclado móvil pendientes de prueba del propietario.
+- [x] B: MEDIO sin diálogo para teclado ordinario con capability de sesión QR; set explícito de atajos ALTO, confirmación PC y revalidación. No se alteran mouse/clic ni type_text local/Telegram. Security solo contiene la excepción puntual; core intacto.
+- [x] C: teclado/captura/ratón separados; sonda de foco en subproceso terminable; colas y timeouts acotados, revocación, latidos, errores visibles y ninguna repetición automática tras desconexión.
+- [x] Pruebas: 97 aprobadas (83 anteriores + 14 nuevas), JavaScript Node y compileall. Solo backend/sonda simulados; no se intentó captura, mouse/teclado reales ni diagnóstico del escritorio aislado.
+- [x] Alcance auditado contra v5: core, tema, Spotify y demás módulos existentes sin cambios, salvo los cuatro módulos remotos/seguridad autorizados.
+- [x] README y VERIFICACION incluyen pasos exactos numerados, riesgos y límites (foco por navegador, Ctrl+Alt+Supr no sintetizable, Windows elevado).
+- [ ] Validación manual: streaming con v6, tacto, texto/IME/atajos, confirmaciones altas, pérdida de Wi-Fi y certificado en PC/celular real. No declarada resuelta por el agente.
+- [x] ZIP v6 generado: 88 archivos, 76 módulos Python, CRC/integridad aprobados. Sin .venv, data, modelos, .env ni claves. Las capturas incluidas son las históricas de interfaz v5; no se tomaron capturas nuevas.
+
 ## V5 — entrega y pendientes explícitos
 - [x] P1: referencia Nextendo recibida, abierta y medida directamente (tabla en VERIFICACION). Hero, resumen, radios, punto 15 px y dos columnas adaptados conservando paleta. GUI real y capturas propias revisadas. No se afirma recuperar la fuente/CSS exactos del raster.
 - [x] P2 preservación: fuentes remotas, core y security idénticos a v4. Se reconoce que el usuario ya comprobó pantalla/ratón en su PC. Diagnóstico nuevo: CodexSandboxDesktop distinto de Default; MSS/ImageGrab fallan allí. Instrucciones del teléfono en README.

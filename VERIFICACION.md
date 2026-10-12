@@ -1,3 +1,47 @@
+# Verificación v6 — 26/09/2026 — solo remoto
+
+## Ejecutado en este entorno
+
+- VICTOR_IA_v6.zip generado e inspeccionado: 88 archivos, 76 módulos Python, CRC correcto; exclusión de .venv, data, .env y cachés. Las imágenes CAPTURAS_V5 son históricas, no pruebas nuevas del remoto.
+- **97 pruebas aprobadas en 31,385 s:** las 83 existentes y 14 nuevas del remoto. `python -m compileall -q main.py victor tests`: salida 0. No se instalaron ni reinstalaron dependencias.
+- Node 24.18 ejecutó el codec real de JavaScript: diferencias de texto, Unicode, salto de línea/Tab, borrado, orden/ACK WebSocket, rechazo y descarte de cola. El JavaScript completo extraído de la página pasó `node --check`. Node es solo una dependencia de esa prueba de desarrollo, no de la app.
+- Pruebas Python: todas las permutaciones de los atajos peligrosos; alias y teclas ordinarias; rechazo de campos extras/caracteres de control/secuencias inválidas; UTF-16 y tamaño de INPUT; identidad HWND/PID con título mutable; riesgo y ámbito de autorización; revocación tras confirmar; parada antes de consumir cola; worker de teclado libre del estado busy de VictorCore; lock de sesión libre mientras espera aprobación.
+- FastAPI TestClient ejecutó autenticación del WebSocket `/keyboard`, vinculación a la IP del dispositivo, JSON real, ACK y ping/pong. Backend de entrada y sonda de foco simulados: NO se enviaron teclas ni se accedió al escritorio. Se comprobó cierre de trabajadores. No equivale a una prueba TLS/Wi-Fi con teléfono.
+- La caducidad del certificado se comprobó asignando una fecha vencida a la política, no esperando un certificado real ni probando avisos nativos del navegador.
+- Las pruebas existentes de mapeo táctil, límites de ventana y captura siguieron pasando con sus mocks originales. Las trazas MSS/ImageGrab de esos tests son fallos inducidos: no hubo intentos nuevos de captura real ni diagnóstico de CodexSandboxDesktop.
+- Se corrigieron dos fallos encontrados por los tests nuevos: codificación cp1252 del proceso Node (ahora UTF-8 explícito) y limpieza al cancelar el scope del WebSocket. Se repitieron primero esos tests afectados y después la suite completa.
+
+## Alcance y arquitectura
+
+Comparación exacta contra ZIP v5: solo cambiaron cuatro módulos existentes: `integrations/local_remote.py`, `integrations/remote_view.py`, `system/input_automation.py` y el bloque puntual de `security.py`. **core.py, theme.py, Spotify, GUI, voz y todos los demás módulos existentes son idénticos**. Las pruebas anteriores no se editaron. Se añadieron módulos dedicados al teclado, foco y tests.
+
+- `/control` mantiene el ratón/confirmaciones del orquestador existente; `/screen` mantiene su worker de captura. `/keyboard` usa una cola ordenada acotada y worker propios, sin pasar por busy de VictorCore. Cada socket tiene su tráfico independiente. Los locks de sesiones solo protegen acceso breve a diccionarios; no abarcan SendInput, aprobaciones ni la captura.
+- Se evita el retardo de 0,5 s de activación y la pausa global PyAutoGUI por cada letra. Los paquetes normales exigen que la ventana autorizada siga activa; una aprobación alta puede devolver el foco únicamente a la ventana autorizada. Se usa la identidad HWND/PID para soportar cambios de título sin escribir en otra ventana.
+- El único bypass de diálogo es `remote_keyboard_input`, MEDIO, origen local_web, con capability de teclado creada por el servidor y validada contra la sesión QR. No se aplica a ratón, local, Telegram o riesgo ALTO. La autorización/rechazo y ejecución quedan registradas sin el contenido de las teclas normales.
+- Código: `keyboard_protocol.py` (schema/riesgos), `keyboard_worker.py` (cola/autorización), `keyboard_socket.py` (WS/ACK/vida), `keyboard_client.py` (codec/cliente JS), `remote_input.py` (SendInput), `remote_focus.py` (UI Automation/Win32), y adaptación de `remote_view.py`. La entrada Unicode sigue el mismo mecanismo nativo que type_text, sin portapapeles.
+- Foco en subproceso oculto: hasta 8 s para inicio y 2 s por respuesta; si se bloquea se termina y queda Teclado manual. Se detecta el elemento editable, no solo la ventana. No se lee su texto. WebSocket con latido, timeout de apertura y mensajes de reconexión/HTTPS; la cola no se reenvía tras perder ACK. Certificado vencido revoca autorización y se regenera al reiniciar el servidor.
+
+## Solo verificable por el propietario en su PC/celular
+
+Se conserva como válida la prueba previa del propietario: streaming y ratón ya funcionaban en su PC real. Aquí NO se ejecutaron MSS/ImageGrab, SendInput real, movimientos/clics, UI Automation sobre aplicaciones reales, teclado móvil, IME/autocorrección del dispositivo, TLS real, desconexión Wi-Fi física ni medidas de latencia. No se reintentó resolver el aislamiento conocido.
+
+La apertura automática depende de que la aplicación exponga un campo editable y de la política de foco del navegador móvil; iOS y otros navegadores pueden requerir tocar Teclado. Los atajos Ctrl+Alt+Supr/Power no son sintetizables mediante SendInput: se informa sin fingir ejecución. La gestión de otras aplicaciones elevadas depende de las restricciones de Windows; no se eleva el asistente.
+
+## Pasos exactos de aceptación manual
+
+1. Cierra VICTOR y la pestaña remota antigua del celular. Actualiza el código desde v6 conservando tu `.env`, `data/` y `.venv`. Ejecuta `iniciar.bat` en tu escritorio normal de Windows; no necesitas reinstalar dependencias ya disponibles.
+2. Conecta PC y celular a la misma Wi-Fi. Abre Bloc de notas con un documento vacío. Anota el título exacto de su ventana (no solo el nombre de la aplicación).
+3. En VICTOR: ☰ → **Conectar → Activar / detener remoto HTTPS**. Espera el aviso de servidor listo y pulsa **Mostrar QR local**. Escanea el QR nuevo antes de 120 s.
+4. La dirección debe coincidir con la IP del PC mostrada por VICTOR: `https://<IP-del-PC>:8443/#<código>`, o el puerto configurado en REMOTE_PORT. En el aviso de certificado autofirmado, usa Avanzado → Continuar a esa IP (en Safari, Mostrar detalles → Visitar sitio web, si está disponible). Acepta solo la IP mostrada en tu PC. Si el certificado caducó, detén/inicia HTTPS en el PC para regenerarlo y escanea otro QR. No desactives la validación global del navegador. Si Windows pregunta por firewall, permite Python solo en tu red privada de confianza.
+5. Autoriza en el PC compartir pantalla. En el campo superior del móvil introduce el título exacto de Bloc de notas. Debes ver la imagen del PC y el mensaje **Teclado conectado · QR autorizado**. Usa Renovar pantalla · 60 s cuando venza la autorización de streaming.
+6. Toca el área de texto de Bloc de notas sobre la imagen remota y confirma ese clic en el PC (su riesgo MEDIO no cambió). Una vez aplicado, se detectará el campo mediante UI Automation/Win32 cuando la aplicación lo exponga. Si el teclado nativo no se abre automáticamente, pulsa **Teclado**: algunos navegadores móviles exigen ese gesto directo. También puedes enfocar inicialmente el documento desde el PC y pulsar Teclado en el móvil.
+7. Escribe lentamente `Hola áéñ 123 !` y después una frase a tu ritmo habitual. Debe aparecer en Bloc de notas sin escribir EJECUTAR por palabra. Prueba un emoji y el método de composición de tu teclado. La composición IME se envía al confirmar el carácter, no durante sus candidatos provisionales. El cambio de título de Bloc de notas al editar no debe cortar la escritura.
+8. Prueba los botones Intro, Retroceso, Escape y flechas. Marca Ctrl y pulsa A: debe seleccionar todo en Bloc de notas; desmarca Ctrl después. Puedes marcar Alt/Shift y usar los demás botones. Los modificadores solo existen durante cada atajo completo, no quedan mantenidos en el PC. Los botones A/C/V permiten selección/copia/pegado con Ctrl. Pegar contenido se ejecuta en el PC con su portapapeles.
+9. Para probar la separación de riesgos, con el documento de prueba marca Ctrl+Shift y pulsa Escape: VICTOR debe pedir **EJECUTAR** en el PC. Primero recházalo: no debe abrirse el Administrador de tareas y el teclado se detendrá sin repetir entradas. Vuelve a emparejar para continuar. Si decides aprobar después, revisa la ventana y escribe EJECUTAR; la combinación se enviará. Alt+F4 también exige confirmación y puede cerrar la ventana: no lo pruebes sobre trabajo sin guardar. Ctrl+Alt+Supr exige confirmación pero Windows bloquea su síntesis: se mostrará una explicación, no se fingirá que se ejecutó.
+10. Desactiva Wi-Fi del móvil unos segundos. Debe aparecer un aviso de desconexión en vez de quedarse esperando indefinidamente (detección por latido: hasta unos 15 s, más la planificación del navegador). No se reenviarán teclas pendientes al reconectar. Restaura Wi-Fi, genera otro QR desde el PC y abre una sesión nueva. La sesión vence a los diez minutos. **Detener** en la página remota o desactivar HTTPS en el PC revoca el teclado y el resto del remoto.
+
+## Historial de verificación v5 (sus limitaciones de teclado quedan sustituidas por v6)
+
 # Verificación v5 — 25/09/2026
 
 ## Resultado ejecutado, sin atribuir pruebas ajenas

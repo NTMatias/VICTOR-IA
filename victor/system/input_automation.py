@@ -8,6 +8,11 @@ class InputAutomation:
     def __init__(self, cancel):
         self.cancel = cancel
 
+    def remote_keyboard(self, window, event, cancel, validate, binding=None, reactivate=False):
+        """Ruta LAN emparejada; no modifica type_text/press_keys ni sus riesgos."""
+        from victor.system.remote_input import send_remote
+        return send_remote(window, event, cancel, validate, binding, reactivate)
+
     def prepare(self, window):
         require_windows()
         import pyautogui

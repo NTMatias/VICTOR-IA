@@ -34,6 +34,8 @@ class LocalRemote:
         self.address=''
         self.port=8443
         self.frames={}
+        self.keyboard_workers=set()
+        self.certificate_expiry=None
         from victor.integrations.remote_touch import register_touch
         register_touch(self)
         self.capture_thread=None
@@ -56,6 +58,8 @@ class LocalRemote:
         with self.lock:
             entry=self.sessions.get(origin.get('session'))
             return bool(entry and entry['expires']>time.monotonic() and self.ready.is_set()
+                        and (self.certificate_expiry is None or time.time()<self.certificate_expiry)
+                        and (not origin.get('keyboard_channel') or entry.get('keyboard_channel')==origin['keyboard_channel'])
                         and self.config.get('local_remote_enabled') and not self.config.get('remote_block_all'))
 
     def pair(self, code, peer):
@@ -87,6 +91,7 @@ class LocalRemote:
     def stop(self):
         self.stop_event.set(); self.ready.clear()
         with self.lock:
+            for worker in self.keyboard_workers:worker.stop()
             self.sessions.clear(); self.pair_code=''; self.frames.clear()
         if getattr(self.core,'active_origin',{}):
             if self.core.active_origin.get('source')=='local_web': self.core.stop()
@@ -141,6 +146,8 @@ class LocalRemote:
             self.port=int(os.getenv('REMOTE_PORT','8443'))
             if not 1024<=self.port<=65535: raise VictorError('REMOTE_PORT debe estar entre 1024 y 65535.')
             cert,key=self.certificate(self.address)
+            from cryptography import x509
+            self.certificate_expiry=x509.load_pem_x509_certificate(cert).not_valid_after_utc.timestamp()
             with tempfile.TemporaryDirectory(prefix='victor-tls-') as folder:
                 cp,kp=Path(folder)/'cert.pem',Path(folder)/'key.pem'
                 cp.write_bytes(cert); kp.write_bytes(key)
@@ -193,6 +200,8 @@ class LocalRemote:
                     for msg in messages: await asyncio.wait_for(ws.send_json(msg),5)
                     try: data=json.loads(await asyncio.wait_for(ws.receive_text(),.15))
                     except asyncio.TimeoutError: continue
+                    if isinstance(data,dict) and data=={'type':'ping'}:
+                        await ws.send_json({'type':'pong'});continue
                     if time.monotonic()-stamp<.45:
                         await ws.send_json({'error':'Límite de frecuencia.','done':True});continue
                     stamp=time.monotonic()
@@ -205,6 +214,8 @@ class LocalRemote:
             finally:
                 if origin:
                     with self.lock: self.sessions.pop(origin['session'],None);self.frames.pop(origin['session'],None)
+                try:await ws.close(code=1000)
+                except Exception:pass
         @app.websocket('/screen')
         async def screen(ws: WebSocket):
             try:
@@ -224,6 +235,8 @@ class LocalRemote:
             except Exception:
                 try:await ws.close(code=1008)
                 except Exception:pass
+        from victor.integrations.keyboard_socket import install_keyboard_route
+        install_keyboard_route(app,self,authenticate)
         return app
 
     def pointer_batch(self,window,events):
