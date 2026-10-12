@@ -51,14 +51,14 @@ class SecurityManager:
         if origin:
             if self.config.get("remote_block_all"):
                 raise VictorError("El control remoto está bloqueado desde el PC.")
-            if risk == Risk.HIGH and self.config.get("remote_high_policy") == "block":
+            if origin.get("source") == "telegram" and risk == Risk.HIGH and self.config.get("remote_high_policy") == "block":
                 raise VictorError("Acción de alto riesgo bloqueada por remoto. Ejecútala en el PC o habilita confirmación presencial en Ajustes.")
         if risk == Risk.LOW and self.config.get("security") != "strict":
             return
         request = Approval(title, details, risk)
         request.origin = origin
         self.log.info("confirmation requested action=%s risk=%s", title, risk.name)
-        self.emit("remote_approval" if origin and risk != Risk.HIGH else "approval", request)
+        self.emit("remote_approval" if origin and origin.get("source") == "telegram" and risk != Risk.HIGH else "approval", request)
         deadline = time.monotonic()+120
         try:
             while not request.done.wait(0.1):
@@ -75,10 +75,16 @@ class SecurityManager:
 
     def validate_origin(self):
         origin = self.origin()
-        if origin and (origin.get("source") != "telegram" or origin.get("user_id") not in self.config.get("telegram_allowed_ids")
-                       or self.config.get("remote_block_all") or self.config.get("telegram_paused")
-                       or not self.config.get("telegram_enabled")):
+        if origin and not self.origin_authorized(origin):
             raise VictorError("Acceso remoto revocado, pausado o bloqueado desde el PC.")
+
+    def origin_authorized(self, origin):
+        if self.config.get("remote_block_all"):
+            return False
+        if origin.get("source") == "local_web":
+            return bool(getattr(self, "local_authorizer", lambda _: False)(origin))
+        return (origin.get("source") == "telegram" and origin.get("user_id") in self.config.get("telegram_allowed_ids")
+                and not self.config.get("telegram_paused") and self.config.get("telegram_enabled"))
 
     @staticmethod
     def url(value):

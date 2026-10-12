@@ -1,4 +1,4 @@
-# VICTOR.IA v2
+# VICTOR.IA v3
 
 Asistente de escritorio modular para **Windows 10/11 y Python 3.11+ de 64 bits**. Interfaz PySide6 (Qt), chat con streaming, cuatro proveedores de IA, herramientas supervisadas de Windows, memoria e historial SQLite y voz opcional.
 
@@ -78,7 +78,7 @@ La carpeta `workspace/`, creada automáticamente, es la única raíz autorizada 
 - Las aplicaciones iniciales incluyen calculadora, bloc de notas, Paint, explorador y navegadores conocidos. Puedes registrar aliases con un JSON como `{"editor": "C:/Apps/Editor/editor.exe"}`. Solo acepta `.exe` existentes y bloquea intérpretes y herramientas administrativas conocidas. Registra exclusivamente programas que conozcas.
 - Cerrar aplicaciones usa terminación de proceso y **puede perder cambios sin guardar**. Por ello requiere autorización y muestra una advertencia. Algunas aplicaciones de Windows usan un proceso distinto del lanzador; en ese caso no se cierran y se informa.
 
-**Riesgos:** bajo = ejecución directa; medio = tarjeta de confirmación dentro del chat con parámetros exactos; alto = diálogo y escribir `EJECUTAR`. `strict` también confirma operaciones de bajo riesgo. No existe modo que elimine las confirmaciones de alto riesgo. Cada solicitud y su resultado se registran, sin guardar cuerpos con claves.
+**Riesgos:** bajo = ejecución directa; medio = tarjeta de confirmación dentro del chat con parámetros exactos; alto = tarjeta y escribir `EJECUTAR`. `strict` también confirma operaciones de bajo riesgo. No existe modo que elimine las confirmaciones de alto riesgo. Cada solicitud y su resultado se registran, sin guardar cuerpos con claves.
 
 La terminal está limitada a `ipconfig`, `whoami`, `hostname` y `systeminfo`, **sin argumentos**, siempre con confirmación explícita y `shell=False`. Los comandos arbitrarios, instalación de software, edición del registro y elevación administrativa están **deliberadamente deshabilitados**. La IA no puede modificar las listas de permisos.
 
@@ -130,11 +130,34 @@ Riesgo medio: botones inline Confirmar/Cancelar ligados al usuario, chat y acci�
 
 Prueba «Reproduce DTMF en Spotify», «Pausa Spotify», «Siguiente en Spotify», «Anterior en Spotify», «Qué suena en Spotify» y «Mis playlists de Spotify». Las herramientas incluyen volumen (0–100), búsqueda y reproducción, estado actual y hasta 50 playlists. Modificar reproducción requiere confirmación. Se consulta la pista real después de reproducir; si todavía no coincide se informa como no confirmada. Sin Premium o dispositivo activo se explica el problema y se intenta abrir la app. Si no se encuentra, registra su ejecutable en `applications` como alias `spotify`.
 
-## Google y remoto web/QR (opcionales diferidos)
+## Google: Gmail, Calendar y Drive
 
-Gmail, Calendar y Drive con OAuth propio **no están implementados en esta versión**. La clave Gemini solo habilita IA; no concede acceso a esos servicios. Por ello no aparece una tarjeta proactiva con correos o eventos.
+En Google Cloud Console crea un proyecto, habilita **Gmail API, Google Calendar API y Google Drive API**, configura la pantalla de consentimiento y añade tu cuenta como usuario de prueba si la aplicación está en Testing. Crea un **cliente OAuth de aplicación de escritorio**; no un cliente web. Copia su ID y secreto a `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en `.env`. Gemini y Google OAuth son independientes.
 
-Tampoco se incluye servidor FastAPI/WebSocket, trackpad web, pantalla en directo, código QR ni grabación móvil con HTTPS. No hay certificados ni opciones SCREEN_FPS/SCREEN_QUALITY inoperantes. El canal móvil implementado es Telegram con notas de voz. Estos elementos eran opcionales en el alcance solicitado y quedan explícitamente diferidos.
+Reinicia VICTOR y pulsa ☰ → Conectar → **Conectar Google**. Se abre el navegador y un receptor temporal en 127.0.0.1. Hay 90 segundos para autorizar. El token se cifra con **DPAPI del usuario Windows** en `data/google.oauth`. Si Windows deniega DPAPI, la conexión persistente falla y nunca se guarda el token en texto plano. Debe ejecutarse en una sesión de escritorio normal del mismo usuario. No compartas `.env`, tokens ni copias de `data/`.
+
+Herramientas disponibles en Tools o mediante IA:
+
+- `google_unread`: hasta cinco correos no leídos, remitente, asunto y extracto proporcionado por Gmail.
+- `google_events`: próximos diez eventos del calendario principal. **Próximos eventos Google** en Conectar usa la misma herramienta. Solo tras obtener un evento real aparece su tarjeta en la cabecera; vacía o desconectada no inventa sugerencias.
+- `google_drive_search(query)`: hasta 20 archivos por coincidencia de nombre; solo metadatos y enlaces, no descarga documentos.
+- `google_send_email(to, subject, body)`: envía realmente el mensaje. **Alto riesgo: muestra el contenido completo y exige EJECUTAR en el PC**. No se envió ningún correo real durante las pruebas de entrega.
+
+El modo Testing, la verificación de scopes sensibles y las políticas de tu organización pueden limitar el acceso. Reautoriza si cambias scopes o caduca el token. Los datos obtenidos pueden incorporarse al contexto de IA si solicitas su análisis; configura el proveedor correspondiente.
+
+## Remoto local HTTPS, QR, trackpad y teclado
+
+1. PC y celular deben estar en la misma red privada. En Conectar pulsa **Activar / detener remoto HTTPS**, espera el aviso y pulsa **Mostrar QR local**. No se inicia automáticamente al abrir VICTOR.
+2. Abre el QR en el celular. La URL usa la IP LAN detectada, puerto 8443 (editable como `REMOTE_PORT`) y HTTPS. Es un certificado **autofirmado**: el navegador mostrará un aviso. Comprueba que la dirección corresponde al PC y acepta la excepción local. En algunos navegadores/políticas administradas esta excepción puede no permitirse. No se publica un túnel ni se abre el router.
+3. Si Windows pregunta por firewall, permite Python únicamente en tu red privada. El programa no cambia reglas de firewall ni necesita administrador. Las redes Wi-Fi con aislamiento entre dispositivos impedirán la conexión.
+4. El QR caduca en 120 segundos y se usa una sola vez. El secreto viaja en el fragmento, se retira del navegador y no se registra en URLs del servidor. La sesión dura diez minutos; máximo cuatro dispositivos. Detener el servidor revoca todas las sesiones.
+5. Escribe el **título exacto de la ventana destino**. El trackpad acumula desplazamientos y envía lotes como máximo cada 500 ms o al terminar el gesto. Hay clic izquierdo/derecho/doble y scroll. Cada lote pasa por VictorCore, validación y SecurityManager y pide confirmación en el PC. Los movimientos quedan dentro de la ventana aprobada; pérdida de foco y failsafe detienen la acción. Los lotes recibidos mientras el PC está ocupado se rechazan, no se reproducen después a ciegas.
+6. Texto y Enter/Delete exigen EJECUTAR. Escape, Tab, Backspace y combinaciones Ctrl/Alt/Shift mantienen como mínimo confirmación media. Esto es automatización supervisada por lotes, no un ratón con autorización permanente.
+7. **Ver pantalla · 60 s** solicita permiso separado. Después transmite JPEG en otro trabajador y otro WebSocket. `SCREEN_FPS=10` y `SCREEN_QUALITY=60`; límites efectivos 1–20 fps y 20–90. La resolución se reduce hasta 1920×1080. El ritmo real depende de CPU, captura y Wi-Fi. Al fallar la captura se detiene y se informa. No se guardan los frames en disco.
+
+`local_remote_enabled` permite desactivar el canal y `remote_block_all` bloquea ambos canales remotos. Telegram y HTTPS coexisten y comparten una sola cola de ejecución y las mismas políticas. El botón de apagado funciona aunque una orden espere confirmación.
+
+El certificado dura 30 días y contiene la IP actual. Su clave persistente se protege con DPAPI. Si DPAPI no está disponible, **solo TLS** puede usar una clave efímera en una carpeta temporal que se elimina al parar: el siguiente inicio cambia el certificado y el navegador pedirá aceptarlo otra vez. No existe ese respaldo para tokens Google/Spotify. El ZIP no contiene certificados ni claves TLS. La prueba real de HTTPS se hizo desde este PC a su IP LAN; conexión desde un celular y rendimiento de streaming real siguen pendientes.
 
 ## Pantalla, visión y búsqueda
 
@@ -156,7 +179,7 @@ El contexto usa un presupuesto de caracteres, mensajes recientes y recuerdos rel
 
 ## Solución de problemas
 
-- **No hay Python:** instala Python 3.12 x64 con Tkinter y soporte `venv`; marca Add to PATH. Python de 32 bits puede impedir instalar dependencias.
+- **No hay Python:** instala Python 3.12 x64 con soporte `venv`; marca Add to PATH. Python de 32 bits puede impedir instalar dependencias.
 - **No abre la GUI:** ejecuta `iniciar.bat` desde una terminal para ver el error. Repite `instalar.bat`. Se necesita una sesión de escritorio interactiva.
 - **Clave ausente:** revisa el nombre exacto en `.env`, que Windows no lo haya guardado como `.env.txt`, y reinicia.
 - **401/403:** clave inválida o permisos insuficientes. **429:** cuota, saldo o límite temporal. **400/404:** modelo/parámetros no compatibles. Edita el modelo.
@@ -198,3 +221,18 @@ Los servicios externos, modelos, cuotas y hardware no se incluyen en el proyecto
 - Si una función opcional no se instaló, el instalador lo avisa; el chat sigue funcionando. Python 3.12 de 64 bits es la versión comprobada. No se comprobó una instalación nueva en todas las versiones posteriores de Python.
 
 Documentación: [ddgs](https://github.com/deedy5/ddgs), [Ollama tags](https://docs.ollama.com/api/tags), [python-telegram-bot](https://docs.python-telegram-bot.org/en/stable/), [Spotipy](https://spotipy.readthedocs.io/en/2.26.0/), [Spotify redirect URI](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri).
+
+## Revisión visual v3, punto por punto
+
+Captura propia incluida: **INTERFAZ_V3.png**. Se abrió la aplicación real y se revisaron también las variantes a 420 px y panel cerrado.
+
+1. Panel: ocupa su propia parte del layout, nunca tapa el chat. A menos de 800 px se coloca debajo para evitar comprimir ambos hasta hacerlos ilegibles; al ocultarlo el chat recupera el espacio. Bordes de 20 px y botones rápidos iguales; 2×2 al estrecharse.
+2. Burbujas: usuario azul a la derecha, asistente gris a la izquierda, máximo 70%, 12 px entre mensajes. El formato JSON de herramientas/historial se presenta como etiquetas y texto, manteniendo avisos de incertidumbre. Rutas largas abreviadas con texto completo en tooltip.
+3. Permisos: tarjeta con alerta y contexto, Confirmar en acento y Cancelar secundario. Las acciones altas conservan la palabra EJECUTAR; el cambio es de presentación, no de autoridad.
+4. Métricas: reflow 2×2 y estados con punto verde/azul/ámbar. No se inventan lecturas antes de obtener muestras.
+5. Compositor: entrada, micrófono y enviar a 52 px de alto, con etiquetas de escucha/conexión discretas. Detener permanece visible.
+6. Tema: paleta y estilos centralizados en `victor/gui/theme.py`, incluidos burbujas, estados y confirmación.
+
+La Parte A solo modificó GUI y sus pruebas. La Parte B corrigió la liberación del MP3 de Qt; la Parte C añadió registros Google y autorización de origen local mediante extensiones acotadas del núcleo existente, sin reemplazarlo.
+
+Fuentes de integración: [Google OAuth](https://googleapis.dev/python/google-auth-oauthlib/latest/reference/google_auth_oauthlib.flow.html), [Gmail send](https://developers.google.com/workspace/gmail/api/guides/sending), [Calendar events](https://developers.google.com/calendar/api/v3/reference/events/list), [Drive files](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list), [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/), [Uvicorn TLS](https://www.uvicorn.org/settings/).

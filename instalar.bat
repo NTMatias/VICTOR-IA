@@ -28,7 +28,7 @@ if errorlevel 1 goto fallo
 echo.
 echo Instalando funciones opcionales. Si alguna falla, el chat seguira funcionando.
 set "VICTOR_OPTIONAL_FAILED=0"
-for %%P in ("mss>=9,<11" "pyautogui>=0.9.54,<1" "pygetwindow>=0.0.9,<1" "pyttsx3>=2.98,<3" "SpeechRecognition>=3.14,<4" "sounddevice>=0.5,<1" "numpy>=1.26,<3" "pycaw>=20240210" "pywin32>=306" "faster-whisper>=1.1,<2" "edge-tts>=7,<8" "python-telegram-bot>=22,<23" "spotipy>=2.25,<3") do (
+for %%P in ("mss>=9,<11" "pyautogui>=0.9.54,<1" "pygetwindow>=0.0.9,<1" "pyttsx3>=2.98,<3" "SpeechRecognition>=3.14,<4" "sounddevice>=0.5,<1" "numpy>=1.26,<3" "pycaw>=20240210" "pywin32>=306" "faster-whisper>=1.1,<2" "edge-tts>=7,<8" "python-telegram-bot>=22,<23" "spotipy>=2.25,<3" "google-auth-oauthlib>=1.2,<2" "fastapi>=0.115,<1" "uvicorn>=0.30,<1" "websockets>=14,<17" "qrcode>=8,<9" "cryptography>=44,<52") do (
     .venv\Scripts\python.exe -m pip install %%P --timeout 20 --retries 1
     if errorlevel 1 (
         echo AVISO: No se pudo instalar %%P

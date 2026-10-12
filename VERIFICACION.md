@@ -1,3 +1,39 @@
+# Verificación v3 — resultados de este turno
+
+## Parte A: interfaz real
+
+GUI abierta antes/después de modificarla, capturas propias a 1120 y 420 px y panel cerrado. Se revisaron visualmente. La prueba GUI comprueba ausencia de intersección panel/chat, botones de igual ancho, burbujas ≤70%, compositor alineado, permisos y cierre limpio. `INTERFAZ_V3.png` es una captura del widget Qt, no una captura del escritorio externo.
+
+## Parte B: pruebas reales autorizadas
+
+- Entorno observado: Windows, CPython 3.12.14, procesador Intel64 Family 6 Model 158 y **7,94 GB de RAM disponibles como total**. No se certifica un benchmark del i5-8400/16 GB descrito sin un modelo local.
+- MSS: volvió a fallar `BitBlt` (Windows no proporcionó código adicional). ImageGrab: `screen grab failed`. El flujo `analyze_screen` también se intentó con esquema correcto y devolvió el error contenido. No hubo imagen ni respuesta real de visión.
+- Calculadora: el lanzador devolvió PID, pero la comprobación no encontró ventana visible ni proceso persistente. Se mantiene como no verificado.
+- Micrófono: se enumeraron dispositivos, incluido Realtek, y se completó la grabación de cinco segundos a 16 kHz. La transcripción falló porque no existe el modelo Whisper local. No se midió inferencia ni se afirmó reconocer una frase. Audio capturado solo en memoria, no incluido en ZIP.
+- Voz: Edge generó un MP3 real; Qt llegó a `EndOfMedia`. Se detectó un bug: al terminar, el reproductor retenía el archivo y la limpieza producía WinError 32, activando erróneamente SAPI. Se corrigió liberando el backend Qt antes de borrar el temporal. La prueba completa posterior terminó con código 0. Audibilidad física no comprobable por el agente. SAPI por separado devolvió acceso denegado (-2147024891).
+- Búsqueda ddgs real: fuentes HTML obtenidas y leídas, incluida docs.python.org. Aviso del almacén de certificados de Windows, sin impedir el resultado. El primer harness omitió `cancel`; se corrigió el harness, no la aplicación.
+- IA: no hay claves OpenAI/Anthropic/Gemini presentes; Ollama local no respondió. No se pudo completar «hola» contra un modelo. Tampoco hay configuración Google, Telegram ni Spotify en este contexto; no se probaron cuentas reales.
+- Volumen: lectura inicial 100; se bajó realmente a 98 y se restauró a 100. El primer intento de subir no podía aumentar porque ya estaba al máximo; no se cuenta como cambio.
+
+## Parte C: Google y remoto
+
+- Google implementado con OAuth independiente, tokens DPAPI, REST con timeouts y herramientas de Gmail/Calendar/Drive. Tests con mocks para lectura, consultas escapadas, MIME y bloqueo de envío sin confirmación. **No se enviaron correos ni se completó OAuth real**: faltan credenciales y DPAPI no está disponible en este contexto.
+- Prueba nativa de DPAPI para la clave TLS denegada por Windows. El token OAuth sigue sin poder degradarse a texto plano. TLS admite clave efímera borrada al detener el servidor, con aviso visible.
+- **HTTPS real aprobado**: certificado generado, respuesta 200 sobre IP privada LAN, contenido de página con trackpad, emparejamiento WebSocket y rechazo de `run_terminal` por la lista de herramientas del canal. El servidor terminó. Uvicorn registró un timeout de apagado elegante con cero tareas pendientes; la comprobación confirmó que el hilo dejó de ejecutarse.
+- Protocolo y seguridad probados con TestClient: Origin ajeno rechazado, QR de un uso, revocación, caducidad, riesgos altos confirmados únicamente en PC, límites de puntero y trabajador JPEG independiente. No se movió el puntero ni se escribió en aplicaciones personales durante estos tests; la captura JPEG fue simulada.
+- Pendiente real: acceso desde celular, aceptación de certificado en su navegador, acciones del trackpad/teclado y streaming de escritorio (captura bloqueada). No se declara rendimiento de 10 fps comprobado.
+
+## Compilación y dependencias
+
+Se mantiene la base de pruebas anterior. Suite v3: **68 pruebas aprobadas**, incluidas las 36 originales, las de v2 y nueve de servicios v3. Compilación e imports comprobados; `pip check` sin conflictos. Las trazas de tests de fallos de captura son esperadas.
+
+No se ejecutó de nuevo el instalador completo. Se instalaron dependencias nuevas desde wheels oficiales. **Incidencia respecto a la instrucción de conservar paquetes:** las restricciones iniciales hicieron que pip cambiara websockets 16.1.1→15.0.1 y cryptography 50.0.1→49.0.0. No se ocultó ni se volvió a reinstalar para deshacerlo; la suite y pip check pasaron. El instalador v3 amplía rangos para admitir también las versiones anteriores y evitar esa sustitución innecesaria en el PC del usuario.
+
+El ZIP excluye .venv, data, .env, certificados, tokens, grabaciones, modelos y cachés. Incluye una captura propia de la interfaz con una consulta de RAM de prueba.
+
+---
+## Registro histórico v2/v1 (no describe nuevas pruebas v3)
+
 # Verificación de VICTOR.IA v2 — 24/09/2026
 
 Entorno: Windows, Python 3.12.14 de 64 bits. Se trabajó sobre el proyecto existente; se conservaron las 36 pruebas originales. No se reinstalaron dependencias existentes: solo se incorporaron las nuevas mediante wheels oficiales.

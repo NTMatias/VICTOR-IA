@@ -50,12 +50,14 @@ class VictorCore:
         self.plugins.load_builtin("windows-and-assistant", install_tools, self)
         from victor.integrations.spotify import register_spotify
         self.spotify = register_spotify(self)
+        from victor.integrations.google import register_google
+        self.google = register_google(self)
         self.log = logging.getLogger("victor.core")
 
     def submit(self, text, conversation_id, direct_tool=None, origin=None):
         if self.busy.is_set():
             return False
-        if origin and (origin.get("source") != "telegram" or origin.get("user_id") not in self.config.get("telegram_allowed_ids") or self.config.get("remote_block_all")):
+        if origin and not self.security.origin_authorized(origin):
             self.emit("notice", "Orden remota no autorizada.")
             return False
         self.busy.set()

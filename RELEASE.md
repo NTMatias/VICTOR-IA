@@ -1,19 +1,19 @@
-# VICTOR.IA v2.0.0 — Interfaz Qt, voz y primeras conexiones
+# VICTOR.IA v3.0.0 — Google y control remoto HTTPS
 
-- Migración de CustomTkinter a PySide6/Qt, interfaz adaptable y métricas del equipo.
-- Órdenes locales directas, búsqueda web y mejoras del enrutamiento de herramientas.
-- Whisper local, Edge TTS y escucha continua; configuración de Ollama CPU/GPU.
-- Integraciones iniciales de Spotify y Telegram con control de usuarios autorizados.
+- Integración Google OAuth para Gmail, Calendar y Drive.
+- Control remoto local HTTPS y emparejamiento por QR.
+- Chat con burbujas, controles rápidos consistentes y tarjetas de confirmación.
+- Mejoras de organización, cierre y manejo de errores de servicios.
 
 ## Procedencia
 
-Importación de la copia real `VICTOR_IA_v2.zip`. SHA256 del archivo original: `994e993b426e124a1a44e1ac2cdaf01aa7b85644a7af01c21156ff954f5f7721`.
+Importación de la copia real `VICTOR_IA_v3.zip`. SHA256 del archivo original: `34aae7e1d1ca111b88e681740dcc6d12f63e18a80296ac06f92a5ba1a9dc7589`.
 
 El código de esta etapa se conserva. Para la publicación se refuerza `.gitignore`, se anonimizan rutas locales de la documentación y se añade esta nota. Las fechas de los commits reflejan la importación a Git, no fechas inventadas de desarrollo.
 
 ## Descarga y requisitos
 
-- `VICTOR_IA_v2.0.0_fuente.zip`: código completo de esta etapa, con sus scripts y documentación.
+- `VICTOR_IA_v3.0.0_fuente.zip`: código completo de esta etapa, con sus scripts y documentación.
 - Las fuentes requieren Windows 10/11 x64, Python 3.11+ y las dependencias de su versión. Consultar su README.
 - Los servicios online necesitan Internet y las cuentas/claves correspondientes; no se incluye ninguna cuenta ni saldo.
 

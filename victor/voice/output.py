@@ -132,10 +132,16 @@ def speak_worker():
                 player.play()
                 app.exec()
                 player.stop()
+                # Windows mantiene abierto el MP3 hasta liberar el backend de Qt.
+                player.setSource(QUrl())
+                from shiboken6 import delete
+                delete(player)
+                delete(output)
+                app.processEvents()
                 if failed:
                     raise RuntimeError("No audio output")
             return
         except Exception:
             # Respaldo real SAPI; errores de ambos se contienen en el proceso padre.
-            pass
+            logging.getLogger("victor.voice").exception("Edge TTS failed; trying SAPI")
     speak_sapi(payload)

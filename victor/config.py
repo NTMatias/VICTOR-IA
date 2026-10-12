@@ -31,6 +31,7 @@ DEFAULTS = {
     "tts_backend": "edge", "edge_voice": "es-EC-LuisNeural", "conversation_window": 45,
     "telegram_enabled": False, "telegram_allowed_ids": [], "telegram_paused": False,
     "remote_block_all": False, "remote_high_policy": "block", "remote_rate_limit": 6,
+    "local_remote_enabled": False,
 }
 
 
@@ -96,7 +97,7 @@ class ConfigManager:
             raise VictorError("Perfil Ollama inválido.")
         if d["tts_backend"] not in ("edge", "sapi") or not isinstance(d["edge_voice"], str):
             raise VictorError("Configuración de salida de voz inválida.")
-        for key in ("telegram_enabled", "telegram_paused", "remote_block_all"):
+        for key in ("telegram_enabled", "telegram_paused", "remote_block_all", "local_remote_enabled"):
             if not isinstance(d[key], bool):
                 raise VictorError("Configuración remota inválida.")
         if not isinstance(d["telegram_allowed_ids"], list) or any(type(i) is not int or i <= 0 for i in d["telegram_allowed_ids"]):

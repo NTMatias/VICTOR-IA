@@ -7,16 +7,17 @@ from datetime import datetime
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QPoint, QEasingCurve
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QLabel, QPushButton, QVBoxLayout,
-    QHBoxLayout, QGridLayout, QScrollArea, QTabWidget, QListWidget, QListWidgetItem, QLineEdit, QPlainTextEdit, QComboBox, QMessageBox)
+    QHBoxLayout, QBoxLayout, QGridLayout, QScrollArea, QTabWidget, QListWidget, QListWidgetItem, QLineEdit, QPlainTextEdit, QComboBox, QMessageBox)
 from victor.core import VictorCore
-from victor.gui.theme import STYLE
-from victor.gui.widgets import Bubble, Composer, ListeningWave, ApprovalCard, ApprovalDialog
+from victor.gui.theme import STYLE, LABEL_STYLES, state_style
+from victor.gui.widgets import Bubble, MessageRow, Composer, ListeningWave, ApprovalCard, ApprovalDialog
 from victor.gui.panels import SettingsManager, example_args
 from victor.gui.metrics import MetricsWorker
 from victor.voice.input import VoiceInput
 from victor.voice.output import VoiceOutput
 from victor.security import Risk
 from victor.integrations.telegram_bot import TelegramService
+from victor.integrations.local_remote import LocalRemote
 
 
 class GUIManager(QMainWindow):
@@ -28,6 +29,7 @@ class GUIManager(QMainWindow):
         self.voice_output = VoiceOutput(config, self.emit)
         self.voice_input = VoiceInput(config, self.emit, lambda: not self.core.busy.is_set() and not self.voice_output.speaking.is_set())
         self.telegram = TelegramService(config, self.core, self.voice_input.transcriber, self.emit)
+        self.local_remote = LocalRemote(config, self.core, self.emit)
         self.active_remote = None
         self.integration_cancel = threading.Event()
         self.auth_thread = None
@@ -44,6 +46,7 @@ class GUIManager(QMainWindow):
         self.setFont(QFont("Segoe UI Variable", 10))
         self.setStyleSheet(STYLE)
         self.build()
+        self.set_state("Listo")
         rows = self.core.history.list()
         self.conversation_id = rows[0]["id"] if rows else self.core.history.create()
         self.load_conversation(self.conversation_id)
@@ -68,18 +71,24 @@ class GUIManager(QMainWindow):
     def build(self):
         self.root = QWidget()
         self.root.setObjectName("root")
-        self.setCentralWidget(self.root)
+        self.outer = QWidget()
+        self.outer.setObjectName("root")
+        self.outer_layout = QBoxLayout(QBoxLayout.Direction.LeftToRight, self.outer)
+        self.outer_layout.setContentsMargins(20, 20, 20, 20)
+        self.outer_layout.setSpacing(16)
+        self.outer_layout.addWidget(self.root, 1)
+        self.setCentralWidget(self.outer)
         layout = QVBoxLayout(self.root)
-        layout.setContentsMargins(20, 20, 20, 16)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
         header = QHBoxLayout()
         greetings = QVBoxLayout()
         hour = datetime.now().hour
         greeting = "Buenos días" if hour < 12 else "Buenas tardes" if hour < 19 else "Buenas noches"
         small = QLabel(greeting + "  ·  VICTOR.IA")
-        small.setStyleSheet("color: #9ba9c3;")
+        small.setStyleSheet(LABEL_STYLES["muted"])
         title = QLabel("¿En qué te ayudo?")
-        title.setStyleSheet("font-size: 26px; font-weight: 600;")
+        title.setStyleSheet(LABEL_STYLES["heading"])
         greetings.addWidget(small)
         greetings.addWidget(title)
         header.addLayout(greetings, 1)
@@ -91,7 +100,7 @@ class GUIManager(QMainWindow):
         self.mic.setFixedSize(52, 52)
         self.mic.pressed.connect(self.mic_press)
         self.mic.released.connect(self.mic_release)
-        header.addWidget(self.mic)
+        # El micrófono forma parte del compositor inferior.
         layout.addLayout(header)
         self.metric_grid = QGridLayout()
         self.metric_cards, self.metric_values = [], {}
@@ -100,57 +109,73 @@ class GUIManager(QMainWindow):
             card.setObjectName("card")
             inner = QVBoxLayout(card)
             caption = QLabel(label)
-            caption.setStyleSheet("font-size: 10px; color: #9ba9c3;")
+            caption.setStyleSheet(LABEL_STYLES["caption"])
             value = QLabel("Listo" if key == "state" else "—")
-            value.setStyleSheet("font-size: 19px; font-weight: 600;")
+            value.setStyleSheet(LABEL_STYLES["metric"])
             inner.addWidget(caption)
             inner.addWidget(value)
             self.metric_values[key] = value
             self.metric_cards.append(card)
         layout.addLayout(self.metric_grid)
         self.quick = QGridLayout()
+        self.quick_buttons = []
         for i, (label, command) in enumerate((("Ver pantalla", lambda: self.send("¿Qué hay en mi pantalla?")),
             ("Navegar", lambda: self.send("Abre Google")), ("Abrir app", self.quick_open), ("Memoria", lambda: self.toggle_drawer(1)))):
-            self.quick.addWidget(self.button(label, command), 0, i)
+            button = self.button(label, command)
+            self.quick_buttons.append(button)
+            self.quick.addWidget(button, 0, i)
         layout.addLayout(self.quick)
+        self.proactive = QLabel()
+        self.proactive.setObjectName("proactive")
+        self.proactive.setWordWrap(True)
+        self.proactive.setTextFormat(Qt.TextFormat.PlainText)
+        self.proactive.hide()
+        layout.addWidget(self.proactive)
         self.chat_scroll = QScrollArea()
         self.chat_scroll.setWidgetResizable(True)
         self.chat_body = QWidget()
         self.chat_layout = QVBoxLayout(self.chat_body)
         self.chat_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.chat_layout.setContentsMargins(0, 0, 0, 0)
+        self.chat_layout.setContentsMargins(4, 8, 4, 8)
+        self.chat_layout.setSpacing(12)
         self.chat_scroll.setWidget(self.chat_body)
         layout.addWidget(self.chat_scroll, 1)
         self.listen_text = QLabel("Micrófono apagado")
         self.listen_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.listen_text.setStyleSheet("color: #9ba9c3;")
+        self.listen_text.setStyleSheet(LABEL_STYLES["muted"])
         self.wave = ListeningWave()
         self.wave.hide()
         layout.addWidget(self.wave)
         layout.addWidget(self.listen_text)
         self.error_label = QLabel("")
         self.error_label.setWordWrap(True)
-        self.error_label.setStyleSheet("color: #f2b7a9; font-size: 11px;")
+        self.error_label.setStyleSheet(LABEL_STYLES["error"])
         layout.addWidget(self.error_label)
         self.entry = Composer()
         self.entry.setPlaceholderText("Escribe una orden o una pregunta…")
-        self.entry.setFixedHeight(72)
+        self.entry.setFixedHeight(52)
         self.entry.submitted.connect(self.send)
-        layout.addWidget(self.entry)
+        composer_row = QHBoxLayout()
+        composer_row.setSpacing(10)
+        composer_row.addWidget(self.entry, 1)
+        composer_row.addWidget(self.mic)
+        layout.addLayout(composer_row)
         actions = QHBoxLayout()
         self.connection_label = QLabel("Sin verificar")
-        self.connection_label.setStyleSheet("font-size: 10px; color: #9ba9c3;")
+        self.connection_label.setStyleSheet(LABEL_STYLES["caption"])
         actions.addWidget(self.connection_label, 1)
         actions.addWidget(self.button("Detener", self.stop))
         self.send_button = self.button("Enviar  ↑", self.send)
         self.send_button.setObjectName("primary")
-        actions.addWidget(self.send_button)
+        self.send_button.setFixedSize(76, 52)
+        composer_row.addWidget(self.send_button)
         layout.addLayout(actions)
         self.build_drawer()
         self.arrange_metrics()
 
     def build_drawer(self):
-        self.drawer = QFrame(self.root)
+        self.drawer = QFrame()
+        self.outer_layout.addWidget(self.drawer)
         self.drawer.setObjectName("drawer")
         drawer_layout = QVBoxLayout(self.drawer)
         top = QHBoxLayout()
@@ -158,6 +183,8 @@ class GUIManager(QMainWindow):
         top.addWidget(self.button("Cerrar", lambda: self.toggle_drawer()))
         drawer_layout.addLayout(top)
         self.tabs = QTabWidget()
+        self.tabs.tabBar().setExpanding(False)
+        self.tabs.tabBar().setUsesScrollButtons(True)
         drawer_layout.addWidget(self.tabs)
         history = QWidget()
         hl = QVBoxLayout(history)
@@ -209,47 +236,63 @@ class GUIManager(QMainWindow):
         il.addWidget(self.button("Generar código de emparejamiento", self.pair_telegram))
         il.addWidget(self.button("Pausar / reanudar remoto", lambda: self.telegram.pause(not self.config.get("telegram_paused"))))
         il.addWidget(self.button("Conectar Spotify", self.connect_spotify))
+        il.addWidget(self.button("Conectar Google", self.connect_google))
+        il.addWidget(self.button("Próximos eventos Google", lambda: self.send("Consultar calendario", ("google_events", {}))))
+        il.addWidget(self.button("Activar / detener remoto HTTPS", self.toggle_local_remote))
+        il.addWidget(self.button("Mostrar QR local", self.show_local_qr))
+        self.qr_image = QLabel()
+        self.qr_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        il.addWidget(self.qr_image)
         il.addStretch()
-        self.tabs.addTab(integrations, "Conectar")
+        integration_scroll = QScrollArea()
+        integration_scroll.setWidgetResizable(True)
+        integration_scroll.setWidget(integrations)
+        self.tabs.addTab(integration_scroll, "Conectar")
         self.select_tool(self.tool_select.currentText())
         self.drawer.hide()
-        self.drawer_animation = QPropertyAnimation(self.drawer, b"pos", self)
+        self.drawer_animation = QPropertyAnimation(self.drawer, b"maximumWidth", self)
         self.drawer_animation.setDuration(180)
-        self.drawer_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.drawer_animation.valueChanged.connect(lambda _: self.arrange_metrics())
         self.drawer_animation.finished.connect(lambda: self.drawer.setVisible(self.drawer_open))
 
     def arrange_metrics(self):
-        columns = 2 if self.width() < 650 else 4
+        columns = 2 if self.root.width() < 650 else 4
+        for i in range(4):
+            self.metric_grid.setColumnStretch(i, 1 if i < columns else 0)
+            self.quick.setColumnStretch(i, 1 if i < columns else 0)
         for i, card in enumerate(self.metric_cards):
             self.metric_grid.addWidget(card, i // columns, i % columns)
-        if hasattr(self, "quick"):
-            widgets = [self.quick.itemAt(i).widget() for i in range(self.quick.count())]
-            for i, button in enumerate(widgets):
-                self.quick.addWidget(button, i // columns, i % columns)
+        for i, button in enumerate(self.quick_buttons):
+            self.quick.addWidget(button, i // columns, i % columns)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        if hasattr(self, "drawer"):
+            self.layout_drawer()
         if hasattr(self, "metric_cards"):
             self.arrange_metrics()
-        if hasattr(self, "drawer"):
-            width = min(400, self.root.width()-16)
-            self.drawer.resize(width, self.root.height()-16)
-            self.drawer.move(self.root.width()-width-8 if self.drawer_open else self.root.width(), 8)
+
+    def layout_drawer(self):
+        narrow = self.width() < 800
+        self.outer_layout.setDirection(QBoxLayout.Direction.TopToBottom if narrow else QBoxLayout.Direction.LeftToRight)
+        self.drawer.setMaximumHeight(250 if narrow else 16777215)
+        self.drawer.setMaximumWidth(16777215 if narrow else 360)
+        self.drawer.setMinimumWidth(0)
 
     def toggle_drawer(self, tab=None):
+        self.drawer_open = True if tab is not None else not self.drawer_open
         if tab is not None:
             self.tabs.setCurrentIndex(tab)
-            self.drawer_open = True
-        else:
-            self.drawer_open = not self.drawer_open
-        width = min(400, self.root.width()-16)
-        self.drawer.resize(width, self.root.height()-16)
-        self.drawer.show()
-        self.drawer.raise_()
         self.drawer_animation.stop()
-        self.drawer_animation.setStartValue(self.drawer.pos())
-        self.drawer_animation.setEndValue(QPoint(self.root.width()-width-8 if self.drawer_open else self.root.width(), 8))
-        self.drawer_animation.start()
+        self.layout_drawer()
+        if self.width() >= 800:
+            self.drawer.show()
+            self.drawer_animation.setStartValue(0 if self.drawer_open else 360)
+            self.drawer_animation.setEndValue(360 if self.drawer_open else 0)
+            self.drawer_animation.start()
+        else:
+            self.drawer.setVisible(self.drawer_open)
+        QTimer.singleShot(200, self.arrange_metrics)
 
     def quick_open(self):
         self.toggle_drawer(3)
@@ -257,24 +300,16 @@ class GUIManager(QMainWindow):
 
     def refresh_config(self):
         configured = [p for p, enabled in self.config.credentials_status().items() if enabled]
-        self.connection_label.setText(self.config.get("provider") + " · " + ("clave configurada" if configured else "local / sin claves"))
+        self.connection_label.setText(self.config.get("provider") + " · " + ("sin verificar" if configured else "Sin conexión a IA"))
         if not configured and self.config.get("provider") != "Ollama":
             self.error_label.setText("Configura .env para IA online o selecciona Ollama en Ajustes. Los comandos locales funcionan sin claves.")
-        self.setStyleSheet(STYLE if self.config.get("theme") != "Light" else STYLE.replace("#0d111c", "#e8edf6").replace("#171e2e", "#f3f6fd").replace("#edf2ff", "#182238"))
+        self.setStyleSheet(__import__("victor.gui.theme", fromlist=["theme_style"]).theme_style(self.config.get("theme")))
 
     def append_message(self, role, text):
-        container = QWidget()
-        row = QHBoxLayout(container)
-        row.setContentsMargins(0, 3, 0, 3)
-        bubble = Bubble(role, text)
-        if role == "user":
-            row.addStretch(1)
-        row.addWidget(bubble, 8)
-        if role != "user":
-            row.addStretch(1)
+        container = MessageRow(role, text)
         self.chat_layout.addWidget(container)
         self.scroll_bottom()
-        return bubble
+        return container.bubble
 
     def scroll_bottom(self):
         QTimer.singleShot(0, lambda: self.chat_scroll.verticalScrollBar().setValue(self.chat_scroll.verticalScrollBar().maximum()))
@@ -290,6 +325,45 @@ class GUIManager(QMainWindow):
             self.integration_info.setText("En tu chat privado con el bot escribe /vincular " + self.telegram.pairing_code() + " · caduca en 120 segundos.")
         except Exception as exc:
             self.error_label.setText(str(exc))
+
+    def remote_service(self, origin):
+        return self.local_remote if origin.get("source") == "local_web" else self.telegram
+
+    def toggle_local_remote(self):
+        enabled = not self.local_remote.running
+        self.config.save({"local_remote_enabled": enabled})
+        self.local_remote.start() if enabled else self.local_remote.stop()
+        if not enabled:
+            self.qr_image.clear()
+            self.integration_info.setText("Remoto local detenido.")
+
+    def show_local_qr(self):
+        try:
+            import io, qrcode
+            from PySide6.QtGui import QPixmap
+            url = self.local_remote.qr_url()
+            data = io.BytesIO()
+            qrcode.make(url).save(data, format="PNG")
+            pixmap = QPixmap()
+            pixmap.loadFromData(data.getvalue())
+            self.qr_image.setPixmap(pixmap.scaled(190,190,Qt.AspectRatioMode.KeepAspectRatio))
+            self.integration_info.setText("Misma Wi-Fi. Acepta el certificado local. QR de un uso, 120 segundos. " + url.split('#')[0])
+            QTimer.singleShot(120000, self.qr_image.clear)
+        except Exception:
+            self.error_label.setText("No pude generar el QR. Espera al servidor y revisa que qrcode esté instalado.")
+
+    def connect_google(self):
+        if self.auth_thread and self.auth_thread.is_alive():
+            return
+        def authorize():
+            try:
+                self.core.google.authorize(self.integration_cancel)
+                self.emit("notice", "Google conectado. Consulta correos, calendario o Drive desde Tools.")
+            except Exception as exc:
+                from victor.errors import VictorError
+                self.emit("notice", str(exc) if isinstance(exc, VictorError) else "Google no pudo autorizarse. Revisa credenciales y usuario de prueba en Cloud Console.")
+        self.auth_thread = threading.Thread(target=authorize, name="victor-google-auth", daemon=True)
+        self.auth_thread.start()
 
     def connect_spotify(self):
         if self.auth_thread and self.auth_thread.is_alive():
@@ -317,7 +391,7 @@ class GUIManager(QMainWindow):
         self.voice_output.stop()
         self.entry.clear()
         self.error_label.clear()
-        self.append_message("user", (f"Telegram {origin['user_id']}: " if origin else "") + text)
+        self.append_message("user", (f"Remoto {origin['user_id']}: " if origin else "") + text)
         self.current_bubble = self.append_message("assistant", "…")
         self.partial = ""
         self.send_button.setEnabled(False)
@@ -424,18 +498,31 @@ class GUIManager(QMainWindow):
             logging.getLogger("victor.gui").exception("Qt event failed")
             self.error_label.setText("No se pudo actualizar la interfaz. Consulta el registro local.")
         if self.closing:
-            threads = [self.core.thread, self.voice_input.thread, self.voice_output.thread, self.metrics.thread, self.telegram.thread, self.auth_thread]
+            threads = [self.core.thread, self.voice_input.thread, self.voice_output.thread, self.metrics.thread, self.telegram.thread, self.auth_thread, self.local_remote.thread, self.local_remote.capture_thread]
             if not any(t and t.is_alive() for t in threads):
                 self.closed_cleanly = True
                 self.close()
 
+    def set_state(self, state):
+        self.metric_values["state"].setText("● " + state)
+        self.metric_values["state"].setStyleSheet(state_style(state))
+
     def handle_event(self, kind, payload):
+        if kind == "google_summary":
+            self.proactive.setText(payload)
+            self.proactive.setVisible(bool(payload))
+            return
         if kind == "remote_command":
             origin = payload["origin"]
-            if self.closing or not self.telegram.can_execute(origin):
+            service = self.remote_service(origin)
+            permitted = service.authorized(origin) if origin.get("source") == "local_web" else service.can_execute(origin)
+            if self.closing or not permitted:
                 return
             if self.core.busy.is_set():
-                self.telegram.reply(origin, "El PC está ocupado. Intenta de nuevo al terminar la orden actual.")
+                if origin.get("source") == "local_web":
+                    service.reply(origin, "PC ocupado. Espera y vuelve a enviar.", done=True)
+                else:
+                    service.reply(origin, "El PC está ocupado. Intenta de nuevo al terminar la orden actual.")
             else:
                 self.send(payload["text"], payload.get("tool"), origin)
             return
@@ -449,17 +536,17 @@ class GUIManager(QMainWindow):
                 self.scroll_bottom()
             if kind == "answer" and not self.closing and not self.core.cancel.is_set():
                 if self.active_remote:
-                    self.telegram.reply(self.active_remote, payload)
+                    self.remote_service(self.active_remote).reply(self.active_remote, payload)
                 else:
                     self.voice_output.speak(payload)
         elif kind == "approval":
             if self.closing or self.core.cancel.is_set():
                 payload.done.set()
             elif payload.risk == Risk.HIGH:
-                dialog = ApprovalDialog(self, payload)
-                self.approvals.append(dialog.card)
-                dialog.open()
-                self.high_dialog = dialog
+                card = ApprovalCard(payload)
+                self.approvals.append(card)
+                self.chat_layout.addWidget(card)
+                self.scroll_bottom()
             else:
                 card = ApprovalCard(payload)
                 self.approvals.append(card)
@@ -472,27 +559,29 @@ class GUIManager(QMainWindow):
         elif kind == "hardware":
             self.metric_values["cpu"].setToolTip(payload["description"])
         elif kind == "status":
-            self.metric_values["state"].setText("Pensando" if self.core.busy.is_set() else "Listo")
+            self.set_state("Pensando" if self.core.busy.is_set() else "Listo")
         elif kind == "connection":
             self.connection_label.setText(payload)
         elif kind in ("notice", "error"):
             self.error_label.setText(payload[:800])
             if kind == "error" and self.active_remote:
-                self.telegram.reply(self.active_remote, payload)
+                self.remote_service(self.active_remote).reply(self.active_remote, payload)
         elif kind == "voice_status":
             listening = payload.startswith("Escuchando")
             self.listen_text.setText("Escuchando · di '" + self.config.get("wake_word") + "' para hablar" if listening else payload)
             self.wave.setVisible(listening)
             self.wave.set_active(listening and self.isActiveWindow())
-            self.metric_values["state"].setText("Escuchando" if listening else "Listo")
+            self.set_state("Escuchando" if listening else "Listo")
         elif kind == "speech_status":
             self.listen_text.setText(payload)
         elif kind == "voice_text":
             self.send(payload)
         elif kind == "done":
+            if self.active_remote and self.active_remote.get("source") == "local_web":
+                self.local_remote.reply(self.active_remote, "Turno finalizado.", done=True)
             self.active_remote = None
             self.send_button.setEnabled(not self.closing)
-            self.metric_values["state"].setText("Listo")
+            self.set_state("Listo")
             self.refresh_history()
             self.refresh_memories()
 
@@ -513,6 +602,7 @@ class GUIManager(QMainWindow):
             self.stop()
             self.integration_cancel.set()
             self.telegram.stop()
+            self.local_remote.stop()
             self.voice_output.close()
             self.metrics.stop_event.set()
             self.entry.setEnabled(False)

@@ -1,5 +1,11 @@
 # VICTOR.IA v2 — progreso y reanudación
 
+## V3
+- [x] Parte A: GUI únicamente. Panel comparte diseño (lateral en ancho, debajo en angosto), márgenes 20 px, botones iguales y 2×2, burbujas máximo 70%, resultados JSON presentados como texto, rutas con tooltip, tarjetas de confirmación destacadas, estados con color y compositor 52 px. Prueba GUI ampliada aprobada y capturas propias wide/narrow/closed revisadas. No se modificó núcleo en esta parte.
+- [x] Parte B: ddgs real, grabación 5 s, volumen 100→98→100 y Edge/Qt reproducido. Corregido bloqueo de MP3 al limpiar el reproductor; salida 0 tras corrección. Sin modelo Whisper, claves ni Ollama disponible. MSS/ImageGrab bloqueados, calculadora sin ventana persistente y SAPI acceso denegado; no se declaran resueltos. Datos completos en VERIFICACION.md al cierre.
+- [x] Parte C: Google OAuth y remoto HTTPS local implementados. Nueve tests nuevos aprobados y HTTPS/WSS real verificado; cuentas Google y celular pendientes, DPAPI bloqueado para tokens.
+- [x] V3: documentación actualizada, 68 pruebas, compilación e integridad ZIP. Sin datos privados ni credenciales. Consultar VERIFICACION.md para límites e incidencia de versiones pip.
+
 Base existente: `work/VICTOR_IA`. No reescribir núcleo ni eliminar las 36 pruebas originales.
 
 - [x] Bloque 1: alias de argumentos, reintento de esquema, router local, Ollama CPU/GPU, ddgs, errores. Cerrado: 42 pruebas aprobadas y búsqueda real con cuatro páginas leídas.

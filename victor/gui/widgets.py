@@ -1,8 +1,53 @@
 import math
+import json
+import re
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QPlainTextEdit, QDialog
 from victor.security import Risk
+from victor.gui.theme import COLORS, bubble_style
+
+
+def display_text(text):
+    """Presentación local de resultados; conserva incertidumbre y no añade acciones."""
+    def render(value):
+        if isinstance(value, dict):
+            return "\n".join(f"{str(k).replace('_', ' ').capitalize()}: {render(v)}" for k, v in value.items())
+        if isinstance(value, list):
+            return "\n".join("• " + render(v) for v in value) or "Sin elementos."
+        if isinstance(value, bool):
+            return "Sí" if value else "No"
+        return "No disponible" if value is None else str(value)
+    raw = str(text).strip()
+    prefix = ''
+    if raw.startswith('[Resultado de herramienta ') and '\n' in raw:
+        prefix, raw = raw.split('\n', 1)
+        prefix = prefix.strip('[]').replace('_', ' ') + '\n'
+    try:
+        value = json.loads(raw.removeprefix('```json').removeprefix('```').removesuffix('```').strip())
+        if isinstance(value, (dict, list)):
+            raw = render(value)
+    except (ValueError, TypeError):
+        if raw.startswith(('{', '[{', '```json')):
+            raw = 'Preparando resultado…'
+    return prefix + re.sub(r"(?:[A-Za-z]:[/\\])[^\n]{70,}", lambda m: m[0][:20] + "…" + m[0][-35:], raw)
+
+
+class MessageRow(QFrame):
+    def __init__(self, role, text):
+        super().__init__()
+        self.bubble = Bubble(role, text)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        if role == "user":
+            layout.addStretch()
+        layout.addWidget(self.bubble)
+        if role != "user":
+            layout.addStretch()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.bubble.setMaximumWidth(max(120, int(self.width() * .70)))
 
 
 class Composer(QPlainTextEdit):
@@ -18,7 +63,8 @@ class Composer(QPlainTextEdit):
 class Bubble(QFrame):
     def __init__(self, role, text):
         super().__init__()
-        self.setStyleSheet("QFrame {border-radius: 16px; background: " + ("#2865cf" if role == "user" else "#222b3b") + ";}")
+        self.setStyleSheet(bubble_style(role))
+        self.role = role
         layout = QVBoxLayout(self)
         layout.setContentsMargins(15, 11, 15, 11)
         self.label = QLabel(text)
@@ -26,9 +72,11 @@ class Bubble(QFrame):
         self.label.setTextFormat(Qt.TextFormat.PlainText)
         self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.label)
+        self.set_text(text)
 
     def set_text(self, text):
-        self.label.setText(text)
+        self.label.setText(display_text(text) if self.role != "user" else text)
+        self.label.setToolTip(str(text))
 
 
 class ApprovalCard(QFrame):
@@ -36,11 +84,11 @@ class ApprovalCard(QFrame):
     def __init__(self, request, parent=None):
         super().__init__(parent)
         self.request = request
-        self.setObjectName("card")
+        self.setObjectName("approval")
         layout = QVBoxLayout(self)
-        title = QLabel("Autorizar: " + request.title)
+        title = QLabel("⚠ Autorizar: " + request.title.replace('_', ' '))
         if request.origin:
-            title.setText(title.text() + " · Telegram " + str(request.origin["user_id"]))
+            title.setText(title.text() + " · " + str(request.origin["user_id"]))
         title.setWordWrap(True)
         layout.addWidget(title)
         details = QPlainTextEdit(request.details)
@@ -54,6 +102,7 @@ class ApprovalCard(QFrame):
             layout.addWidget(self.phrase)
         row = QHBoxLayout()
         self.approve = QPushButton("Confirmar")
+        self.approve.setObjectName("primary")
         self.decline = QPushButton("Cancelar")
         self.approve.clicked.connect(lambda: self.resolve(True))
         self.decline.clicked.connect(lambda: self.resolve(False))
@@ -122,7 +171,7 @@ class ListeningWave(QFrame):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(QPen(QColor("#79a9ff"), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+        painter.setPen(QPen(QColor(COLORS["accent"]), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
         for i in range(32):
             height = 3 + (abs(math.sin(i * .5 + self.phase)) * 23 if self.active else 1)
             x = self.width() / 2 + (i-16) * 6
