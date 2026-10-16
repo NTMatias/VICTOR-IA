@@ -10,8 +10,9 @@ Esta entrega no está lista para un despliegue público general. No sustituye to
 - Endpoints públicos comprobados: autenticación disponible y correo confirmado obligatorio; lectura anónima de perfiles y accesos devuelve 401.
 - deployment.json conecta esta instalación con el proyecto usando solo su clave publicable. La identidad privada para firmar actualizaciones permanece cifrada en data/update_signing, fuera de la distribución.
 - Página de confirmación: https://ntmatias.github.io/VICTOR-IA/. Elimina los tokens del fragmento inmediatamente y no los almacena ni transmite. Configurada como Site URL en Supabase.
-- Suite completa actual: 329 pruebas ejecutadas, sin fallos ni errores, con una prueba online optativa omitida. Incluye cuentas, permisos, voz, cancelación, Spotify, WhatsApp, ventanas y agentes.
+- Suite general: 329 pruebas ejecutadas, sin fallos ni errores, con una prueba online optativa omitida. Después del último arreglo de cancelación se ejecutaron además 84 pruebas de voz, todas aprobadas. Incluyen cuentas, permisos, voz, cancelación, Spotify, WhatsApp, ventanas y agentes.
 - Se corrigió una carrera real al probar el micrófono mientras la voz anterior aún se cancelaba: la interfaz espera a que terminen ambas operaciones antes de capturar, sin bloquear Qt.
+- Se corrigió el estado ocupado que podía persistir al cancelar una frase todavía en cola, antes de generar audio. La nueva prueba falla con la implementación anterior y aprueba con el arreglo; Detener libera el estado cuando no queda generación ni reproducción activa.
 - Las pruebas anteriores a la autenticación ahora inician una sesión ficticia explícita. Las de SAPI se migraron a PCM/Edge y las de Spotify comprueban la transparencia y los degradados actuales. No se reintrodujo el motor retirado ni se desactivaron las barreras de acceso.
 
 ## Límites que impiden publicar como estable

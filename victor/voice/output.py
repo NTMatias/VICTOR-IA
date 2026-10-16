@@ -81,6 +81,7 @@ class VoiceOutput:
             if self.audio_stream is not None:
                 try:self.audio_stream.abort()
                 except Exception:pass
+            self._idle()
     def close(self):
         self.closing.set();self.stop()
         def cleanup():

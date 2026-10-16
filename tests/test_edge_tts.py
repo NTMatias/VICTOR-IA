@@ -72,6 +72,23 @@ class Streaming(unittest.TestCase):
             self.assertEqual([a.blocks.get_nowait(),a.blocks.get_nowait()],[b'first',b'second']);self.assertIsNone(a.error)
         finally:c.close()
 
+class StopQueue(unittest.TestCase):
+    def test_stop_before_generation_clears_busy_state_and_completes_waiter(self):
+        from tempfile import TemporaryDirectory
+        from victor.config import ConfigManager
+        from victor.voice.output import VoiceOutput
+        from tests.audio_support import FakeEdgeClient
+        gate=threading.Event();completed=threading.Event()
+        with TemporaryDirectory() as folder:
+            config=ConfigManager(Path(folder));config.save({'voice_enabled':True})
+            with patch('victor.voice.output.EdgeTTS',FakeEdgeClient),patch.object(VoiceOutput,'_generate',lambda self:gate.wait(3)),patch.object(VoiceOutput,'_play',lambda self:gate.wait(3)):
+                voice=VoiceOutput(config,lambda *args:None)
+                try:
+                    voice.speak('Una frase pendiente.',completed=completed)
+                    self.assertTrue(voice.busy);voice.stop()
+                    self.assertTrue(completed.is_set());self.assertFalse(voice.busy)
+                finally:gate.set();voice.close();voice.thread.join(3);voice.play_thread.join(3)
+
 class HTTPReuse(unittest.TestCase):
     def test_pool_reused_and_rotated_on_credentials_change(self):
         from unittest.mock import Mock
