@@ -8,7 +8,10 @@ import sys
 import zipfile
 
 SOURCE=Path(__file__).resolve().parents[1]
-IGNORED=shutil.ignore_patterns('__pycache__','*.pyc','*.pyo','.cache','.hub')
+def IGNORED(directory,names):
+    ignored=shutil.ignore_patterns('__pycache__','*.pyc','*.pyo','.cache','.hub')(directory,names)
+    if Path(directory).name=='lib' and Path(directory).parent.name=='torch':ignored.update(name for name in names if name.endswith('.lib'))
+    return ignored
 
 def copy(source,target):
     if source.is_dir():shutil.copytree(source,target,ignore=IGNORED)
@@ -24,7 +27,16 @@ def build(destination,webview,dependencies=None,public=False):
     for name in ('main.py','portable_start.py','requirements.txt','README.md','PORTABLE_CUENTAS.md','.env.example'):
         copy(SOURCE/name,root/name)
     copy(SOURCE/'.env.example',root/'.env')
-    for extra in ('docs','RELEASE.md','CHANGELOG.md','THIRD_PARTY_NOTICES.md','VERIFICACION.md'):
+    if (SOURCE/'deployment.json').is_file():
+        from victor.deployment import deployment
+        deployment(SOURCE)  # Reject secret keys before copying any public deployment settings.
+        copy(SOURCE/'deployment.json',root/'deployment.json')
+    if public:
+        # Do not distribute private audit notes, screenshots, recordings or host benchmarks.
+        for name in ('NUBE_Y_ACTUALIZACIONES.md','ESCRITORIO_Y_ACCESO.md','RELEASE_8_PREPARACION.md'):
+            if (SOURCE/'docs'/name).is_file():copy(SOURCE/'docs'/name,root/'docs'/name)
+    elif (SOURCE/'docs').exists():copy(SOURCE/'docs',root/'docs')
+    for extra in ('RELEASE.md','CHANGELOG.md','THIRD_PARTY_NOTICES.md','VERIFICACION.md'):
         if (SOURCE/extra).exists():copy(SOURCE/extra,root/extra)
     runtime=root/'python';runtime.mkdir()
     base=Path(sys.base_prefix)
@@ -53,14 +65,14 @@ def build(destination,webview,dependencies=None,public=False):
         saved=dict(DEFAULTS)
     else:
         saved=json.loads((dependencies/'data'/'config.json').read_text(encoding='utf-8'))
-    cfg={key:saved[key] for key in ('theme','language','whisper_model','edge_voice','voice_rate','tts_backend','voice_vocabulary','voice_corrections') if key in saved}
+    cfg={key:saved[key] for key in ('theme','language','whisper_model','edge_voice','voice_rate','tts_backend','voice_vocabulary','voice_corrections','desktop_orb_enabled','desktop_orb_corner') if key in saved}
     cfg.update(provider='OpenAI',auth_methods={'OpenAI':'account','Gemini':'api'},account_models={'OpenAI':'','Gemini':'auto'},
                voice_mode='manual',voice_background_listening=False,voice_enabled=False,voice_backend='whisper',
                fallback=[],gemini_account_enabled=False,microphone='')
     (root/'data'/'config.json').write_text(json.dumps(cfg,ensure_ascii=False,indent=2),encoding='utf-8')
     model=hashlib.sha256(cfg.get('whisper_model','base').encode()).hexdigest()[:16]
     copy(dependencies/'data'/'models'/model,root/'data'/'models'/model)
-    if (SOURCE/'THIRD_PARTY_NOTICES.md').exists():copy(SOURCE/'THIRD_PARTY_NOTICES.md',root/'THIRD_PARTY_NOTICES.md')
+    if (SOURCE/'TTS_LOCAL.md').exists():copy(SOURCE/'TTS_LOCAL.md',root/'TTS_LOCAL.md')
     (root/'workspace').mkdir()
     for name,verify in (('ABRIR VICTOR.bat',False),('COMPROBAR VICTOR.bat',True)):
         content='@echo off\ncd /d "%~dp0"\n"%~dp0python\\python.exe" -X utf8 "%~dp0portable_start.py"'+(' --verify\npause\n' if verify else '\n')

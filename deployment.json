@@ -1,0 +1,12 @@
+{
+  "cloud": {
+    "enabled": true,
+    "url": "https://igqveyxbwhnadyubtsnj.supabase.co",
+    "publishable_key": "sb_publishable_orvUlW5_weHB3Lkh4dbmSA_hXOqHtZH"
+  },
+  "updates": {
+    "enabled": false,
+    "manifest_url": "https://github.com/NTMatias/VICTOR-IA/releases/latest/download/update.json",
+    "public_key_hex": "9296356a6ec3cfadf346c91ff7dcd1143e2447f7348658a91358631e5a29bd21"
+  }
+}

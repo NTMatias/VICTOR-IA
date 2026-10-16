@@ -40,7 +40,7 @@ class WhatsApp(unittest.TestCase):
         return bool(check())
 
     def test_connections_navigation_theme_and_clean_shutdown(self):
-        from victor.gui.app import GUIManager
+        from tests.gui_support import authenticated_gui as GUIManager
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
             app=GUIManager(ConfigManager(Path(folder)))
             try:
@@ -106,7 +106,7 @@ class WhatsApp(unittest.TestCase):
 
     @unittest.skipUnless(os.name=='nt','Host Windows')
     def test_visible_web_theme_recent_click_and_received_preview_with_fixture(self):
-        from victor.gui.app import GUIManager
+        from tests.gui_support import authenticated_gui as GUIManager
         root=Path(__file__).resolve().parents[1]
         host=self.fixture_host
         fixture=Path(__file__).parent/'fixtures/whatsapp.html'

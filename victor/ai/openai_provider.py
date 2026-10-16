@@ -5,6 +5,10 @@ from victor.errors import check_cancel
 
 class OpenAIProvider(BaseProvider):
     name = "OpenAI"
+    def __init__(self):
+        from .transport import Transport
+        self.transport=Transport()
+    def close(self):self.transport.close()
 
     def stream(self, messages, system, specs, cfg, emit, cancel, image=None):
         from openai import OpenAI
@@ -17,7 +21,7 @@ class OpenAIProvider(BaseProvider):
         if specs:
             options["tools"] = [{"type": "function", "function": s} for s in specs]
             options["parallel_tool_calls"] = False
-        with OpenAI(api_key=cfg.get("_api_key") or os.environ["OPENAI_API_KEY"], timeout=cfg["network_timeout"], max_retries=0) as client:
+        with self.transport.use(OpenAI,cancel,api_key=cfg.get("_api_key") or os.environ["OPENAI_API_KEY"], timeout=cfg["network_timeout"], max_retries=0) as client:
             with client.chat.completions.create(**options) as stream:
                 for chunk in stream:
                     check_cancel(cancel)

@@ -234,7 +234,10 @@ def responses_input(messages):
 
 class ChatGPTProvider(BaseProvider):
     name='OpenAI'
-    def __init__(self,account):self.account=account
+    def __init__(self,account):
+        from .transport import Transport
+        self.account=account;self.transport=Transport()
+    def close(self):self.transport.close()
     def stream(self,messages,system,specs,cfg,emit,cancel,image=None):
         from openai import OpenAI
         check_cancel(cancel)
@@ -247,15 +250,12 @@ class ChatGPTProvider(BaseProvider):
         if image:history.append({'role':'user','content':[{'type':'input_text','text':'Analiza la captura según la pregunta.'},
                                                          {'type':'input_image','image_url':'data:image/png;base64,'+image}]})
         options={'model':model,'instructions':system,'input':history,'store':False,'stream':True}
+        if model.startswith('gpt-6'):
+            options['reasoning']={'effort':cfg.get('ai_reasoning_effort','low')}
         if specs:options['input'].insert(0,{'type':'additional_tools','role':'developer','tools':[{'type':'function',**s,'strict':False} for s in specs]})
         reply=Reply();complete=False;pending={}
         # close the transport on cancellation, including while waiting for another event.
-        with OpenAI(api_key=token,base_url=RESOURCE,timeout=cfg['network_timeout'],max_retries=0) as client:
-            done=threading.Event()
-            def watch():
-                while not done.wait(.05):
-                    if cancel.is_set():client.close();return
-            watcher=threading.Thread(target=watch,daemon=True);watcher.start()
+        with self.transport.use(OpenAI,cancel,api_key=token,base_url=RESOURCE,timeout=cfg['network_timeout'],max_retries=0) as client:
             try:
                 with client.responses.create(**options) as stream:
                     for event in stream:
@@ -273,4 +273,3 @@ class ChatGPTProvider(BaseProvider):
                 check_cancel(cancel)
                 error=exc if isinstance(exc,AccountError) else safe_error(getattr(exc,'code',''),getattr(exc,'status_code',None))
                 self.account.state=error.state;raise error from None
-            finally:done.set();watcher.join(.3)

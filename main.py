@@ -26,7 +26,20 @@ def main():
         log = setup_logging(config.data_dir)
         log.info("startup Python=%s", sys.version.split()[0])
         qt = QApplication.instance() or QApplication(sys.argv[:1])
-        app = GUIManager(config)
+        from victor.auth import create_auth
+        from victor.gui.login import LoginOverlay
+        from PySide6.QtWidgets import QDialog,QVBoxLayout
+        auth=create_auth(config.data_dir)
+        if getattr(auth,'cloud',False) or not auth.check_saved_session():
+            gate=QDialog();gate.setWindowTitle('Entrar a VICTOR.IA');gate.resize(500,760)
+            gate_layout=QVBoxLayout(gate);gate_layout.setContentsMargins(0,0,0,0)
+            login=LoginOverlay(auth,gate);gate_layout.addWidget(login);login.authenticated.connect(gate.accept)
+            if gate.exec()!=QDialog.DialogCode.Accepted:return
+        if getattr(auth,'cloud',False):
+            import uuid
+            user_id=str(uuid.UUID(auth.session['user']['id']))
+            config=ConfigManager(config.root,data_dir=config.root/'data/profiles'/user_id)
+        app = GUIManager(config,auth=auth)
         app.show()
         if args.smoke_test:
             def verify_window():

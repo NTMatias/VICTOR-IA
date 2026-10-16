@@ -4,8 +4,8 @@ import threading
 import queue
 import time
 from urllib.parse import urlparse
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt, QTimer, QSize
+from PySide6.QtGui import QPixmap, QPainter, QPainterPath
 from PySide6.QtWidgets import QFrame,QLabel,QPushButton,QSlider,QVBoxLayout,QHBoxLayout
 from victor.security import Risk
 from victor.tools.registry import Tool
@@ -15,6 +15,21 @@ from victor.gui.widgets import icon
 def best_cover(images):
     """Elegir resolución máxima independientemente del orden de la API."""
     return max((i for i in images if i.get('url')),key=lambda i:(i.get('width') or 0)*(i.get('height') or 0),default={}).get('url','')
+
+
+def playback_time(milliseconds):
+    seconds=max(0,int(milliseconds or 0)//1000)
+    return f'{seconds//60}:{seconds%60:02d}'
+
+
+def rounded_cover(pix,size):
+    scaled=pix.scaled(size*2,size*2,Qt.AspectRatioMode.KeepAspectRatioByExpanding,Qt.TransformationMode.SmoothTransformation)
+    scaled=scaled.copy((scaled.width()-size*2)//2,(scaled.height()-size*2)//2,size*2,size*2)
+    result=QPixmap(size*2,size*2);result.fill(Qt.GlobalColor.transparent)
+    painter=QPainter(result);painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    path=QPainterPath();path.addRoundedRect(0,0,size*2,size*2,26,26);painter.setClipPath(path)
+    painter.drawPixmap(0,0,scaled);painter.end();result.setDevicePixelRatio(2)
+    return result
 
 
 class SpotifyPoller:
@@ -37,7 +52,7 @@ class SpotifyPoller:
         return b''
 
     def art_loop(self):
-        while not self.stop_event.is_set():
+          while not self.stop_event.is_set():
             try:url=self.art_requests.get(timeout=.2)
             except queue.Empty:continue
             data=self.download_cover(url)
@@ -66,6 +81,8 @@ class SpotifyPoller:
     def poll_playback(self):
         self.art_thread.start()
         while not self.stop_event.is_set():
+            if not getattr(self,'access_check',lambda:True)():
+                self.stop_event.wait(.5);continue
             delay=5
             try:
                 if self.core.spotify.browser and self.core.spotify.browser.active:
@@ -117,29 +134,52 @@ class SpotifyMiniPlayer(QFrame):
         self.volume_intent=None
         self.last_volume_sent=None
         self.setObjectName('player')
-        self.setFixedSize(292,156)
+        self.setFixedSize(292,260)
         layout=QVBoxLayout(self)
+        layout.setContentsMargins(16,14,16,14);layout.setSpacing(10)
+        heading=QHBoxLayout()
+        self.badge=QLabel('SONANDO AHORA');self.badge.setObjectName('nowBadge');heading.addWidget(self.badge,1)
+        close=QPushButton('×');close.setObjectName('musicTransport');close.setFixedSize(24,24)
+        close.setToolTip('Ocultar mini reproductor');close.setAccessibleName('Ocultar mini reproductor');close.clicked.connect(self.dismiss);heading.addWidget(close)
+        layout.addLayout(heading)
         top=QHBoxLayout()
-        self.cover=QLabel('♫');self.cover.setObjectName('cover');self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter);self.cover.setFixedSize(48,48)
+        top.setSpacing(12)
+        self.cover=QLabel('♫');self.cover.setObjectName('cover');self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter);self.cover.setFixedSize(76,76)
         top.addWidget(self.cover)
-        info=QVBoxLayout();self.title=QLabel();self.artist=QLabel();self.artist.setObjectName('secondary')
+        info=QVBoxLayout();info.setSpacing(5);self.title=QLabel();self.title.setObjectName('songTitle');self.artist=QLabel();self.artist.setObjectName('secondary')
         self.title.setTextFormat(Qt.TextFormat.PlainText);self.artist.setTextFormat(Qt.TextFormat.PlainText)
         info.addWidget(self.title);info.addWidget(self.artist);top.addLayout(info,1)
-        close=QPushButton('×');close.setObjectName('compact');close.setFixedSize(30,30);close.clicked.connect(self.dismiss);top.addWidget(close)
         layout.addLayout(top)
+        timeline=QHBoxLayout();timeline.setSpacing(8)
+        self.elapsed=QLabel('0:00');self.total=QLabel('0:00')
+        for text in (self.elapsed,self.total):text.setObjectName('caption');text.setMinimumWidth(32)
+        timeline.addWidget(self.elapsed)
+        self.progress=QSlider(Qt.Orientation.Horizontal);self.progress.setRange(0,0)
+        self.progress.setAccessibleName('Posición de reproducción');self.progress.setTracking(False)
+        self.progress.sliderReleased.connect(self.seek);timeline.addWidget(self.progress,1);timeline.addWidget(self.total)
+        layout.addLayout(timeline)
         controls=QHBoxLayout()
+        controls.setSpacing(16);controls.addStretch()
+        self.transport=[]
         for label,name in [('⏮','spotify_previous'),('▶','toggle'),('⏭','spotify_next')]:
             b=QPushButton();b.setIcon(icon({'spotify_previous':'previous','toggle':'play','spotify_next':'next'}[name]));b.setAccessibleName({'spotify_previous':'Canción anterior','toggle':'Reproducir','spotify_next':'Siguiente canción'}[name])
+            b.setObjectName('musicPlay' if name=='toggle' else 'musicTransport');b.setFixedSize(46,46) if name=='toggle' else b.setFixedSize(36,36)
+            b.setIconSize(QSize(23,23));self.transport.append(b)
             b.clicked.connect(lambda checked=False,n=name:self.action(n));controls.addWidget(b)
             if name=='toggle':self.play=b
+        controls.addStretch()
         layout.addLayout(controls)
-        row=QHBoxLayout();row.addWidget(QLabel('🔊'))
+        row=QHBoxLayout();volume_label=QLabel('Volumen');volume_label.setObjectName('caption');row.addWidget(volume_label)
         self.volume=QSlider(Qt.Orientation.Horizontal);self.volume.setRange(0,100);row.addWidget(self.volume)
         self.level=QLabel('—');row.addWidget(self.level);layout.addLayout(row)
         self.debounce=QTimer(self);self.debounce.setSingleShot(True);self.debounce.timeout.connect(self.volume_changed)
         self.volume.valueChanged.connect(self.preview_volume)
         self.volume.sliderReleased.connect(self.flush_volume)
         self.hide()
+
+    def seek(self):
+        if self.state and not self.pending:
+            self.app.spotify_command('spotify_seek',{'position':self.progress.value()})
 
     def dismiss(self):
         self.dismissed=True;self.debounce.stop();self.hide()
@@ -152,7 +192,7 @@ class SpotifyMiniPlayer(QFrame):
         self.pending=name
         if name in ('spotify_pause','spotify_resume'):
             self.state=dict(self.state,playing=name=='spotify_resume')
-            self.play.setIcon(icon('pause' if self.state['playing'] else 'play'));self.play.setAccessibleName('Pausar' if self.state['playing'] else 'Reproducir')
+            self.play.setIcon(icon('pause' if self.state['playing'] else 'play','#102A20'));self.play.setAccessibleName('Pausar' if self.state['playing'] else 'Reproducir')
         self.artist.setText('Actualizando Spotify…')
         from victor.gui.tool_labels import friendly_name
         if not self.app.spotify_command(name,{}):
@@ -217,12 +257,21 @@ class SpotifyMiniPlayer(QFrame):
         if state['playing']:self.paused_since=None
         elif self.paused_since is None:self.paused_since=time.monotonic()
         if self.dismissed or (self.paused_since and time.monotonic()-self.paused_since>300):self.hide();return
-        self.title.setText(self.title.fontMetrics().elidedText(state['name'],Qt.TextElideMode.ElideRight,185))
-        self.artist.setText(self.artist.fontMetrics().elidedText(state['artists'],Qt.TextElideMode.ElideRight,185))
+        self.title.setText(self.title.fontMetrics().elidedText(state['name'],Qt.TextElideMode.ElideRight,172))
+        self.artist.setText(self.artist.fontMetrics().elidedText(state['artists'],Qt.TextElideMode.ElideRight,172))
         self.title.setToolTip(state['name']);self.artist.setToolTip(state['artists'])
-        self.play.setIcon(icon('pause' if state['playing'] else 'play'));self.play.setAccessibleName('Pausar' if state['playing'] else 'Reproducir')
+        self.play.setIcon(icon('pause' if state['playing'] else 'play','#102A20'));self.play.setAccessibleName('Pausar' if state['playing'] else 'Reproducir')
+        self.badge.setText('SONANDO AHORA' if state['playing'] else 'EN PAUSA')
+        from victor.gui.theme import is_light
+        color='#323044' if is_light(self.app.config.get('theme')) else '#F3EFFF'
+        self.transport[0].setIcon(icon('previous',color));self.transport[2].setIcon(icon('next',color))
+        self.elapsed.setText(playback_time(state.get('position')));self.total.setText(playback_time(state.get('duration')))
+        if not self.progress.isSliderDown():
+            self.progress.setRange(0,max(0,int(state.get('duration') or 0)));self.progress.setValue(max(0,int(state.get('position') or 0)))
         if state.get('art'):
-            pix=QPixmap();pix.loadFromData(state['art']);self.cover.setPixmap(pix.scaled(48,48,Qt.AspectRatioMode.KeepAspectRatio))
+            pix=QPixmap()
+            if pix.loadFromData(state['art']):self.cover.setPixmap(rounded_cover(pix,76))
+            else:self.cover.clear();self.cover.setText('♫')
         else:self.cover.clear();self.cover.setText('♫')
         if self.volume_intent and (state.get('volume')==self.volume_intent['level'] or time.monotonic()>self.volume_intent['until']):self.volume_intent=None
         if not self.volume_intent and state.get('volume')!=self.last_volume_sent:self.last_volume_sent=None

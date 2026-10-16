@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 from victor.config import ConfigManager
 from victor.voice.levels import pcm_rms, decode_meter
-from victor.voice.output import VoiceOutput, speak_sapi
+from victor.voice.output import VoiceOutput
 
 
 class AudioLevels(unittest.TestCase):
@@ -38,55 +38,47 @@ class AudioLevels(unittest.TestCase):
             with self.subTest(text=text):self.assertIsNone(decode_meter(text))
         self.assertEqual(decode_meter('{"type":"tts_meter","value":false}'),('tts_meter',False))
 
-    def test_reader_discards_cancelled_epoch_and_closed_pipe(self):
-        voice=VoiceOutput.__new__(VoiceOutput);voice.epoch=2;voice.closing=threading.Event();voice.emit=Mock()
-        process=Mock();process.stdout=io.StringIO('{"type":"tts_level","value":0.5}\n')
-        voice.read_meter(process,1);voice.emit.assert_not_called()
-        process.stdout.seek(0);voice.read_meter(process,2);voice.emit.assert_called_once_with('tts_level',.5)
-        process.stdout.close();voice.read_meter(process,2)
+    def test_cancelled_audio_is_released_without_being_queued(self):
+        import queue
+        voice=VoiceOutput.__new__(VoiceOutput);voice.epoch=2;voice.closing=threading.Event()
+        voice.audio=queue.Queue(2);voice.client=Mock();completed=threading.Event()
+        self.assertFalse(voice._put_audio(('fictional-pcm','hola',1,completed),1))
+        self.assertTrue(completed.is_set());self.assertTrue(voice.audio.empty())
+        voice.client.release_audio.assert_called_once_with('fictional-pcm')
 
-    def test_parent_receives_levels_before_process_finishes_and_cleans_up(self):
-        received=threading.Event();finished=threading.Event();events=[]
+    def test_pcm_levels_arrive_during_playback_and_reset_at_completion(self):
+        from tests.audio_support import FakeEdgeClient
+        received=threading.Event();release=threading.Event();events=[]
         def emit(kind,value):
             events.append((kind,value))
             if kind=='tts_level' and value==.5:received.set()
-        class Input(io.StringIO):
-            def close(self):self.payload=self.getvalue();super().close()
-        class Process:
-            def __init__(self):
-                self.stdin=Input();self.stdout=io.StringIO('unrelated log\n{"type":"tts_level","value":0.5}\n');self.returncode=None
-            def wait(self,timeout=None):
-                if not received.wait(2):raise RuntimeError('No streaming meter')
-                self.returncode=0;finished.set();return 0
-            def poll(self):return self.returncode
-            def terminate(self):self.returncode=0
-            def kill(self):self.returncode=1
+        def play(audio,cancelled,emit,on_stream):
+            emit('tts_level',.5)
+            if not release.wait(3):raise RuntimeError('Fixture playback timed out')
         with tempfile.TemporaryDirectory() as folder:
-            cfg=ConfigManager(Path(folder));cfg.save({'voice_enabled':True});process=Process()
-            with patch('victor.voice.output.subprocess.Popen',return_value=process):
-                voice=VoiceOutput(cfg,emit)
+            cfg=ConfigManager(Path(folder));cfg.save({'voice_enabled':True})
+            with patch('victor.voice.output.EdgeTTS',FakeEdgeClient),patch('victor.voice.output.play_pcm',play):
+                voice=VoiceOutput(cfg,emit);completed=threading.Event()
                 try:
-                    completed=threading.Event()
-                    voice.speak('¿En qué te ayudo? Canción, español.', completed=completed);self.assertTrue(finished.wait(3))
-                    self.assertTrue(completed.wait(3))
-                    deadline=time.monotonic()+2
-                    while voice.speaking.is_set() and time.monotonic()<deadline:time.sleep(.01)
-                    self.assertIn(('tts_level',0.),events);self.assertFalse(voice.speaking.is_set())
-                    self.assertEqual(json.loads(process.stdin.payload)['text'],'¿En qué te ayudo? Canción, español.')
-                    self.assertTrue(process.stdin.payload.isascii())
-                finally:voice.close();voice.thread.join(2)
-                self.assertFalse(voice.thread.is_alive());self.assertTrue(process.stdout.closed)
+                    voice.speak('Canción, español.',completed=completed)
+                    self.assertTrue(received.wait(3));self.assertFalse(completed.is_set())
+                    release.set();self.assertTrue(completed.wait(3))
+                    self.assertIn(('tts_level',0.),events)
+                    self.assertEqual(voice.client.requests,['Canción, español.'])
+                finally:
+                    release.set();voice.close();voice.thread.join(3);voice.play_thread.join(3)
+                self.assertFalse(voice.thread.is_alive());self.assertFalse(voice.play_thread.is_alive())
 
-    def test_sapi_render_and_direct_fallback_use_existing_engine(self):
-        payload={'text':'Hola','rate':160,'voice_id':'chosen','language':'es'}
-        engine=Mock()
-        with patch('pyttsx3.init',return_value=engine):
-            speak_sapi(payload,Path('fixture.wav'));engine.save_to_file.assert_called_once_with('Hola','fixture.wav');engine.say.assert_not_called()
-            engine.stop.assert_called_once();engine.reset_mock()
-            speak_sapi(payload);engine.say.assert_called_once_with('Hola');engine.save_to_file.assert_not_called()
-            engine.runAndWait.side_effect=RuntimeError('induced')
-            with self.assertRaises(RuntimeError):speak_sapi(payload)
-            self.assertEqual(engine.stop.call_count,2)
+    def test_edge_playback_error_completes_request_and_resets_meter(self):
+        from tests.audio_support import FakeEdgeClient
+        with tempfile.TemporaryDirectory() as folder:
+            cfg=ConfigManager(Path(folder));cfg.save({'voice_enabled':True});events=[];completed=threading.Event()
+            with patch('victor.voice.output.EdgeTTS',FakeEdgeClient),patch('victor.voice.output.play_pcm',side_effect=RuntimeError('fixture output unavailable')):
+                voice=VoiceOutput(cfg,lambda *e:events.append(e))
+                try:
+                    voice.speak('Hola.',completed=completed);self.assertTrue(completed.wait(3))
+                    self.assertTrue(any(k=='error' for k,v in events));self.assertIn(('tts_level',0.),events)
+                finally:voice.close();voice.thread.join(3);voice.play_thread.join(3)
 
     def test_microphone_levels_come_from_pcm_fixture_and_reset(self):
         import numpy as np
@@ -118,7 +110,7 @@ class UIRepairs(unittest.TestCase):
         while time.monotonic()<deadline:self.qt.processEvents();time.sleep(.005)
 
     def test_navigation_notices_audio_controls_and_all_responsive_pages(self):
-        from victor.gui.app import GUIManager
+        from tests.gui_support import authenticated_gui as GUIManager
         from victor.gui.widgets import display_text
         # This test covers Qt navigation/layout. Dedicated fixture tests cover actual browser hosts.
         with tempfile.TemporaryDirectory() as folder,patch('victor.gui.spotify_embed.SpotifyEmbed.start'),patch('victor.gui.whatsapp_embed.WhatsAppEmbed.start'):

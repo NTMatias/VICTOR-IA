@@ -8,6 +8,7 @@ class MetricsWorker:
     def __init__(self, emit):
         self.emit = emit
         self.stop_event = threading.Event()
+        self.background=lambda:False
         self.thread = threading.Thread(target=self.run, name="victor-metrics", daemon=True)
 
     def start(self):
@@ -19,7 +20,7 @@ class MetricsWorker:
             previous = psutil.net_io_counters()
             stamp = time.monotonic()
             psutil.cpu_percent()
-            while not self.stop_event.wait(2):
+            while not self.stop_event.wait(10 if self.background() else 2):
                 current = psutil.net_io_counters()
                 now = time.monotonic()
                 rate = max(0, current.bytes_recv + current.bytes_sent - previous.bytes_recv - previous.bytes_sent) / max(.1, now-stamp)

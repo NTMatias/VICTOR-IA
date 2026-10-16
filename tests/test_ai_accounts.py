@@ -127,6 +127,10 @@ class Responses(unittest.TestCase):
         self.assertFalse(body['store']);self.assertTrue(body['stream']);self.assertEqual(body['instructions'],'Soy VICTOR')
         for key in ('temperature','max_output_tokens','previous_response_id','conversation'):self.assertNotIn(key,body)
         self.assertEqual(body['input'][0]['type'],'additional_tools');self.assertEqual(body['input'][0]['role'],'developer')
+    def test_gpt_six_keeps_model_and_uses_selected_reasoning(self):
+        self.cfg['account_models']['OpenAI']='gpt-6.1-sol';self.cfg['ai_reasoning_effort']='low';self.account.catalog=[{'id':'gpt-6.1-sol'}]
+        _,body,_=self.stream([NS(type='response.completed')])
+        self.assertEqual(body['model'],'gpt-6.1-sol');self.assertEqual(body['reasoning'],{'effort':'low'});self.assertNotIn('service_tier',body)
     def test_partial_quota_error_and_cancel_are_not_success(self):
         for ending in ([],[NS(type='response.incomplete')],[NS(type='response.failed',response=NS(error=NS(code='subscription_sharing_usage_limit_exceeded')))]):
             with self.assertRaises(AccountError):self.stream([NS(type='response.output_text.delta',delta='partial')]+ending)

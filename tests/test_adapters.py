@@ -40,7 +40,7 @@ class AdapterTests(unittest.TestCase):
             NS(choices=[NS(delta=NS(content=None, tool_calls=[NS(index=0, id=None, function=NS(name=None, arguments="}"))]))]),
         ])
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test"}), patch("openai.OpenAI") as sdk:
-            client = sdk.return_value.__enter__.return_value
+            client = sdk.return_value
             client.chat.completions.create.return_value = chunks
             reply = OpenAIProvider().stream(self.messages, "system", self.specs, self.cfg, self.tokens.append, self.cancel)
             kwargs = client.chat.completions.create.call_args.kwargs

@@ -103,9 +103,9 @@ class SpotifyPage(QScrollArea):
 class SettingsManager(QWidget):
     """Editor único de configuración, dividido en las páginas del diseño."""
     GROUPS={
-        'ia': ('provider','models','fallback','temperature','max_tokens','context_chars'),
-        'voice_settings': ('voice_mode','voice_background_listening','wake_word','language','microphone','voice_backend','whisper_model','openai_transcription_model','voice_vocabulary','voice_corrections','voice_enabled','tts_backend','voice_id','edge_voice','voice_rate','conversation_window','voice_noise_reduction','voice_echo_cancellation','voice_noise_level'),
-        'general': ('theme','auto_search','network_timeout','telegram_enabled','local_remote_enabled','telegram_paused'),
+        'ia': ('provider','models','fallback','temperature','max_tokens','context_chars','ai_reasoning_effort'),
+        'voice_settings': ('voice_mode','voice_background_listening','wake_word','language','microphone','voice_backend','whisper_model','openai_transcription_model','voice_vocabulary','voice_corrections','voice_enabled','tts_backend','voice_id','edge_voice','voice_rate','voice_pitch','speech_dictionary','conversation_window','voice_noise_reduction','voice_echo_cancellation','voice_noise_level'),
+        'general': ('theme','auto_search','network_timeout','telegram_enabled','local_remote_enabled','telegram_paused','desktop_orb_enabled','desktop_orb_corner'),
         'personality': ('name','personality','formality','system_prompt'),
         'ollama': ('ollama_url','ollama_light','ollama_gpu','ollama_timeout','ollama_context','ollama_keep_alive'),
         'vision_settings': ('vision_provider','vision_model'),
@@ -120,7 +120,7 @@ class SettingsManager(QWidget):
         'vision_settings': ('Modelos para visión','Configura el análisis visual de capturas de pantalla.'),
         'security': ('Seguridad y permisos','Decide qué puede hacer el asistente y qué necesita confirmación.'),
     }
-    LABELS={'provider':'Proveedor principal','fallback':'Orden de respaldo','temperature':'Temperatura','max_tokens':'Límite de tokens',
+    LABELS={'desktop_orb_enabled':'Mostrar orbe en el escritorio','desktop_orb_corner':'Esquina del orbe','provider':'Proveedor principal','fallback':'Orden de respaldo','temperature':'Temperatura','max_tokens':'Límite de tokens',
         'context_chars':'Contexto conversacional (caracteres)','voice_mode':'Modo de escucha','wake_word':'Palabra de activación',
         'language':'Idioma','microphone':'Micrófono (índice; vacío = predeterminado)','voice_backend':'Motor de reconocimiento',
         'whisper_model':'Modelo Whisper','voice_enabled':'Leer respuestas en voz alta','tts_backend':'Motor de síntesis',
@@ -150,8 +150,13 @@ class SettingsManager(QWidget):
             'openai_transcription_model':('gpt-transcribe','gpt-4o-transcribe','gpt-4o-mini-transcribe'),
             'tts_backend':('edge','sapi'),'remote_high_policy':('block','pc'),
             'voice_noise_level':('suave','moderado','intenso'),
+            'desktop_orb_corner':('bottom-right','bottom-left','top-right','top-left'),
             'edge_voice':('es-MX-JorgeNeural','es-EC-LuisNeural','es-CO-GonzaloNeural','es-PE-AlexNeural','es-MX-DaliaNeural')}
         if isinstance(value,bool): w=QCheckBox(); w.setChecked(value)
+        elif key=='desktop_orb_corner':
+            w=QComboBox()
+            for title,corner in [('Abajo a la derecha','bottom-right'),('Abajo a la izquierda','bottom-left'),('Arriba a la derecha','top-right'),('Arriba a la izquierda','top-left')]:w.addItem(title,corner)
+            w.setCurrentIndex(w.findData(value))
         elif key in choices:
             w=QComboBox(); w.addItems(choices[key])
             if key=='edge_voice': w.setEditable(True)
@@ -222,7 +227,7 @@ class SettingsManager(QWidget):
             row=QHBoxLayout();self.fallback_provider=QComboBox();self.fallback_provider.addItems(PROVIDERS);row.addWidget(self.fallback_provider,1)
             row.addWidget(button('Añadir',self.add_fallback,'plus'));row.addWidget(button('Quitar',self.remove_fallback,'close'));order.addLayout(row)
             order.addWidget(label('Arrastra para cambiar el orden. Cada proveedor usa su modelo editable.'))
-            panel('right','Parámetros de generación',('temperature','max_tokens','context_chars'))
+            panel('right','Parámetros de generación',('temperature','max_tokens','context_chars','ai_reasoning_effort'))
             from victor.gui.ai_accounts import AccountPanel
             self.account_panels={};self.account_cards={}
             for provider in ('OpenAI',):
@@ -274,13 +279,19 @@ class SettingsManager(QWidget):
             _,l=panel('left','Vocabulario y correcciones',('voice_vocabulary','voice_corrections'))
             l.addWidget(label('OpenAI y Whisper utilizan estos nombres como pistas. Las correcciones sustituyen el título/artista completo únicamente en órdenes de música con cualquiera de los tres motores.'))
             l.addWidget(notice('Añade canciones, artistas o aplicaciones que uses. Para mayor precisión puedes elegir Whisper small y descargarlo; necesita más memoria y tiempo que base.'))
-            _,l=panel('right','Salida de voz',('voice_enabled','tts_backend','edge_voice','voice_id','voice_rate'))
+            _,l=panel('right','Salida de voz',('voice_enabled','tts_backend','edge_voice','voice_id','voice_rate','voice_pitch','speech_dictionary'))
             l.addWidget(label('Jorge: voz masculina de México. Luis: voz masculina de Ecuador. Los signos de formato se convierten en pausas; el texto del chat se conserva.'))
             l.addWidget(button('Probar voz seleccionada',self.preview_voice,'volume'))
             _,l=panel('right','Verificación y acciones');l.addWidget(button('Activar escucha',lambda:self.app.navigate('voice'),'mic'))
             l.addWidget(button('Confirmar por voz',self.app.listen_approval,'shield'));l.addWidget(notice('La confirmación por voz solo se habilita para una acción pendiente en este PC.'))
             self.refresh_recognition()
         elif group=='general':
+            _,orb=panel('left','Orbe del escritorio',('desktop_orb_enabled','desktop_orb_corner'))
+            orb.addWidget(notice('Azul: tu voz. Violeta: voz de VICTOR. Mantén pulsado el centro y arrastra para moverlo. Permanece quieto en silencio.'))
+            _,access=panel('right','Acceso a la aplicación')
+            access.addWidget(button('Cambiar contraseña local',self.change_local_password,'lock'))
+            access.addWidget(button('Administración de cuentas',self.open_cloud_admin,'shield'))
+            access.addWidget(button('Comprobar actualizaciones',self.check_updates,'download'))
             _,l=panel('left','Apariencia',('theme',));row=QHBoxLayout()
             for text,value in [('Oscuro','Dark'),('Claro','Light'),('Seguir sistema','System')]:row.addWidget(button(text,lambda checked=False,v=value:self.fields['theme'].setCurrentText(v)))
             l.addLayout(row)
@@ -314,8 +325,18 @@ class SettingsManager(QWidget):
             l.addWidget(button('Ver confirmación pendiente',self.app.show_pending_approval,'shield'));l.addWidget(button('Confirmar por voz',self.app.listen_approval,'mic'))
             _,l=panel('right','Protecciones activas');l.addWidget(notice('Validación de rutas · Sin sobrescritura · Papelera · Comandos bloqueados · Revocación de sesiones'))
             l.addWidget(button('Detener todas las sesiones remotas',self.app.local_remote.stop,'stop',danger=True));l.addWidget(button('Ver auditoría',lambda:self.app.navigate('diagnostics'),'list'))
+            _,l=panel('right','Acceso y clave personal')
+            l.addWidget(label('Protección de inicio de sesión con clave maestra o PIN para este equipo.'))
+            l.addWidget(button('Cambiar clave de acceso',self.open_change_password,'lock'))
+            l.addWidget(button('Bloquear aplicación ahora',self.app.lock_session,'lock'))
         ll.addStretch();rl.addStretch();page.content.addWidget(Columns(left,right))
         message=label('');self.messages[group]=message;page.content.addWidget(message);page.finish();return page
+
+    def open_change_password(self):
+        from victor.gui.login import ChangePasswordDialog
+        dialog=ChangePasswordDialog(self.app.auth,self)
+        if dialog.exec():
+            self.show_message('Contraseña actualizada correctamente.')
 
     def analyze_from_settings(self, question):
         self.app.navigate('vision')
@@ -404,6 +425,28 @@ class SettingsManager(QWidget):
         values['voice_rate']=self.fields['voice_rate'].value()
         self.app.voice_output.speak('Hola, soy Víctor. ¿Escuchamos música? Puedo reproducir tu canción favorita (sin interrupciones). ¡Vamos!',settings=values,force=True)
 
+    def change_local_password(self):
+        if not self.app.auth.authenticated:return
+        from .login import ChangePasswordDialog
+        dialog=ChangePasswordDialog(self.app.auth,self);dialog.exec()
+
+    def open_cloud_admin(self):
+        if not getattr(self.app.auth,'cloud',False):
+            self.show_message('La nube aún no está conectada. Configura deployment.json para habilitar cuentas y administración.');return
+        from .cloud_admin import CloudAdmin
+        self.admin_dialog=CloudAdmin(self.app.auth,self);self.admin_dialog.show()
+
+    def check_updates(self):
+        if not self.app.updates.settings.get('enabled'):
+            self.show_message('Las actualizaciones aún no están configuradas para esta distribución.');return
+        import threading
+        def run():
+            try:
+                record=self.app.updates.check()
+                self.app.emit('update_available',record) if record else self.app.emit('update_status','Esta versión está al día.')
+            except Exception:self.app.emit('update_status','No se pudo verificar la publicación de actualizaciones.')
+        threading.Thread(target=run,name='victor-check-update',daemon=True).start()
+
     def save(self,keys=None):
         if self.app.core.busy.is_set(): self.show_message('Espera a que termine el turno.'); return
         try:
@@ -413,12 +456,13 @@ class SettingsManager(QWidget):
                 if keys is not None and original not in keys: continue
                 if key.startswith('model:'): models[key[6:]]=w.text().strip(); continue
                 if isinstance(w,QCheckBox): value=w.isChecked()
-                elif isinstance(w,QComboBox): value=w.currentText()
+                elif isinstance(w,QComboBox): value=w.currentData() if key=='desktop_orb_corner' else w.currentText()
                 elif isinstance(w,QSlider): value=w.value()/w.property('factor'); value=int(value) if isinstance(old[key],int) else value
                 else:
                     raw=w.toPlainText() if isinstance(w,QPlainTextEdit) else w.text()
                     value=json.loads(raw) if isinstance(old[key],(dict,list)) else int(raw) if isinstance(old[key],int) else float(raw) if isinstance(old[key],float) else raw.strip()
                 values[key]=value
+            if values.get('desktop_orb_corner',old['desktop_orb_corner'])!=old['desktop_orb_corner']:values['desktop_orb_position']=None
             if keys is None or 'models' in keys: values['models']=models
             self.app.config.validate({**old,**values})
             if (keys is None or 'models' in keys) and not self.save_api_keys():return

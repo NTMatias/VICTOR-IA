@@ -1,0 +1,12 @@
+{
+  "cloud": {
+    "enabled": false,
+    "url": "https://TU-PROYECTO.supabase.co",
+    "publishable_key": "TU-CLAVE-PUBLICABLE"
+  },
+  "updates": {
+    "enabled": false,
+    "manifest_url": "https://github.com/NTMatias/VICTOR-IA/releases/latest/download/update.json",
+    "public_key_hex": "CLAVE-PUBLICA-ED25519-DEL-EDITOR"
+  }
+}

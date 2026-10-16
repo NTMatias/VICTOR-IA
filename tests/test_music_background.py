@@ -114,7 +114,7 @@ class BackgroundPlayer(unittest.TestCase):
         import os
         if os.name!='nt':self.skipTest('WebView2 requiere Windows')
         from PySide6.QtWidgets import QApplication
-        from victor.gui.app import GUIManager
+        from tests.gui_support import authenticated_gui as GUIManager
         from victor.voice.openai_transcription import wav_audio
         import numpy as np
         q=QApplication.instance() or QApplication([]);q.setQuitOnLastWindowClosed(False)
@@ -155,7 +155,7 @@ class BackgroundPlayer(unittest.TestCase):
 class BackgroundGUI(unittest.TestCase):
     def test_auto_start_minimized_pause_mode_switch_and_verified_radio(self):
         from PySide6.QtWidgets import QApplication
-        from victor.gui.app import GUIManager
+        from tests.gui_support import authenticated_gui as GUIManager
         q=QApplication.instance() or QApplication([]);q.setQuitOnLastWindowClosed(False)
         def pump(seconds=.15):
             until=time.monotonic()+seconds

@@ -13,7 +13,7 @@ from victor.errors import VictorError
 from victor.ai.manager import AIManager
 from victor.ai.base import Reply
 from victor.voice.text import correct_music_command, recognition_vocabulary, speech_text
-from victor.voice.output import speak_sapi
+from victor.voice.edge_client import EdgeTTS
 
 
 class Credentials(unittest.TestCase):
@@ -110,20 +110,19 @@ class VoiceText(unittest.TestCase):
         table=speech_text('| Motor | Internet |\n| --- | --- |\n| Local | No |\n| Nube | Sí |')
         self.assertEqual(table,'Motor: Local; Internet: No. Motor: Nube; Internet: Sí.')
         self.assertNotIn('---',speech_text('Resumen\n---\nFinal'))
-    def test_sapi_does_not_match_es_inside_desktop(self):
-        engine=Mock();engine.getProperty.return_value=[NS(name='Microsoft David Desktop',languages=['en-US'],id='english'),NS(name='Microsoft Spanish',languages=['es-MX'],id='spanish')]
-        with patch('pyttsx3.init',return_value=engine):speak_sapi({'text':'Hola','rate':175,'language':'es-EC'})
-        engine.setProperty.assert_any_call('voice','spanish')
-        self.assertNotIn(unittest.mock.call('voice','english'),engine.setProperty.call_args_list)
-        engine.getProperty.return_value=[NS(name='David Desktop',languages=['en-US'],id='english')]
-        with patch('pyttsx3.init',return_value=engine),self.assertRaises(VictorError):speak_sapi({'text':'Hola','rate':175,'language':'es'})
+    def test_edge_uses_explicit_spanish_voice_identity(self):
+        with tempfile.TemporaryDirectory() as folder:
+            cfg=ConfigManager(Path(folder));cfg.save({'edge_voice':'es-MX-JorgeNeural'})
+            client=EdgeTTS(Path(folder),cfg)
+            try:self.assertEqual(client.settings()[0],'es-MX-JorgeNeural')
+            finally:client.close()
 
 
 class SettingsGUI(unittest.TestCase):
     def test_personal_key_save_remove_voice_preview_and_responsive_pages(self):
         import time
         from PySide6.QtWidgets import QApplication, QLineEdit
-        from victor.gui.app import GUIManager
+        from tests.gui_support import authenticated_gui as GUIManager
         q=QApplication.instance() or QApplication([]);q.setQuitOnLastWindowClosed(False)
         def pump(seconds=.1):
             until=time.monotonic()+seconds
@@ -157,7 +156,7 @@ class SettingsGUI(unittest.TestCase):
                     self.assertTrue(speak.call_args.kwargs['force'])
                 app.settings.fields['voice_corrections'].setPlainText(VoiceText.corrections)
                 from victor.config import DEFAULTS
-                self.assertEqual({'models' if k.startswith('model:') else k for k in app.settings.fields},set(DEFAULTS)-{'auth_methods','account_models','gemini_account_enabled'})
+                self.assertEqual({'models' if k.startswith('model:') else k for k in app.settings.fields},set(DEFAULTS)-{'auth_methods','account_models','gemini_account_enabled','desktop_orb_position'})
                 self.assertEqual(set(app.settings.account_panels),{'OpenAI'})
                 self.assertIn('openai',[app.settings.fields['voice_backend'].itemText(i) for i in range(app.settings.fields['voice_backend'].count())])
                 app.settings.fields['voice_backend'].setCurrentText('openai')

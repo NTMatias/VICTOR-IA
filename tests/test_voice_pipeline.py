@@ -198,31 +198,21 @@ class Pipeline(unittest.TestCase):
             with self.assertRaisesRegex(VictorError,'multilingüe'):tr.transcribe([.1],threading.Event())
             model.transcribe.assert_not_called()
 
-    def test_audio_end_marker_precedes_worker_cleanup(self):
-        import subprocess,sys
+    def test_audio_completion_precedes_buffer_cleanup(self):
         from victor.voice.output import VoiceOutput
-        script='''import sys,json,time
-from victor.voice.levels import report_meter
-json.loads(sys.stdin.buffer.readline())
-report_meter('speech_ready',True)
-ack=json.loads(sys.stdin.buffer.readline())
-if not ack['play']:raise SystemExit(1)
-report_meter('speech_ended',time.perf_counter())
-time.sleep(.25)
-'''
-        class Ducker:
-            @contextmanager
-            def hold(self,cancel):yield True
-        real_popen=subprocess.Popen
-        def child(args,**kw):return real_popen([sys.executable,'-c',script],**kw)
-        self.cfg.save({'voice_enabled':True});done=threading.Event()
-        with patch('victor.voice.output.subprocess.Popen',side_effect=child):
-            output=VoiceOutput(self.cfg,Mock());output.music_ducker=Ducker()
+        from tests.audio_support import FakeEdgeClient
+        cleanup=threading.Event();release=threading.Event();completed=threading.Event()
+        class Client(FakeEdgeClient):
+            def release_audio(self,path):
+                cleanup.set();release.wait(3)
+        self.cfg.save({'voice_enabled':True})
+        with patch('victor.voice.output.EdgeTTS',Client),patch('victor.voice.output.play_pcm'):
+            output=VoiceOutput(self.cfg,Mock())
             try:
-                output.speak('hola',completed=done);self.assertTrue(done.wait(5))
-                self.assertTrue(output.audio_end_received);self.assertGreater(time.perf_counter()-output.last_audio_end,.18)
+                output.speak('Hola.',completed=completed);self.assertTrue(completed.wait(3))
+                self.assertTrue(output.audio_end_received);self.assertTrue(cleanup.wait(3))
                 self.assertLess(time.perf_counter()-output.last_audio_end,1.)
-            finally:output.close();output.thread.join(3)
+            finally:release.set();output.close();output.thread.join(3);output.play_thread.join(3)
 
     def test_config_controls_and_stream_timestamp(self):
         for value in ('-1','1.5','texto'):
@@ -234,14 +224,18 @@ time.sleep(.25)
 
     def test_gui_microphone_probe_never_submits_a_tool(self):
         from PySide6.QtWidgets import QApplication
-        from victor.gui.app import GUIManager
+        from tests.gui_support import authenticated_gui as GUIManager
         self.cfg.save({'voice_mode':'continua','voice_background_listening':False})
         q=QApplication.instance() or QApplication([]);q.setQuitOnLastWindowClosed(False)
         app=GUIManager(self.cfg)
         app.voice_input.listen=Mock(return_value='VICTOR manda un correo')
         app.core.submit=Mock(side_effect=AssertionError('Diagnostics cannot execute actions'))
         try:
-            app.test_microphone();deadline=time.perf_counter()+5
+            app.voice_output.generating.set()
+            with patch.object(app.voice_output,'stop'):
+                app.test_microphone();q.processEvents()
+            self.assertTrue(app.voice_diagnostic_active);app.voice_input.listen.assert_not_called()
+            app.voice_output.generating.clear();deadline=time.perf_counter()+5
             while app.voice_diagnostic_active and time.perf_counter()<deadline:q.processEvents();time.sleep(.01)
             self.assertFalse(app.voice_diagnostic_active)
             self.assertIn('VICTOR manda un correo',app.voice_panel.transcript.text())

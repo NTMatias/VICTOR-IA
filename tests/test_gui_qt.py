@@ -23,7 +23,9 @@ class QtGUI(unittest.TestCase):
 
     def test_gui_lifecycle_and_confirmations(self):
         with tempfile.TemporaryDirectory() as folder:
-            app = GUIManager(ConfigManager(Path(folder)))
+            from victor.auth import AuthManager
+            config=ConfigManager(Path(folder));auth=AuthManager(config.data_dir);auth.setup('fixture-password')
+            app = GUIManager(config,auth=auth)
             try:
                 app.show()
                 app.resize(420, 760)

@@ -24,14 +24,26 @@ from victor.integrations.local_remote import LocalRemote
 from victor.gui.spotify_player import SpotifyMiniPlayer, SpotifyPoller, register_player
 from victor.gui.voice_panel import VoicePanel
 from victor.gui.widgets import display_text, icon, DashboardDial, ToolWorker, ResponsiveButtons, WindowControl, TransientNotice, WindowTransitions
+from victor.auth import create_auth
+from victor.gui.desktop_orb import DesktopVoiceOrb
+from victor.gui.login import LoginOverlay
 
 
 class GUIManager(QMainWindow):
-    def __init__(self, config):
+    def __init__(self, config, auth=None):
         super().__init__()
         self.config = config
+        self.auth = auth or create_auth(config.data_dir)
+        self.desktop_orb = DesktopVoiceOrb()
+        self.desktop_orb.reposition(config.get('desktop_orb_corner'))
+        self.desktop_orb.restore_position(config.get('desktop_orb_position'))
+        self.desktop_orb.positionSaved.connect(lambda x,y:self.config.save({'desktop_orb_position':[x,y]}))
         self.events = queue.Queue()
         self.core = VictorCore(config, self.emit)
+        self.core.access_check=lambda:self.auth.authenticated
+        self.core.registry.access_check=lambda:self.auth.authenticated
+        from victor.updates import Updates
+        self.updates=Updates(config.root,self.emit);self.update_dialog=None;self.notified_versions=set()
         register_player(self.core)
         from victor.plugins.video import register_video
         register_video(self.core)
@@ -90,7 +102,7 @@ class GUIManager(QMainWindow):
         from victor.voice.music_ducking import MusicDucker
         self.voice_output.music_ducker = MusicDucker(lambda:self.spotify_web, self.emit)
         self.spotify_poller = SpotifyPoller(self.core, self.emit)
-        self.spotify_poller.thread.start()
+        self.spotify_poller.access_check=lambda:self.auth.authenticated
         self.set_state("Listo")
         rows = self.core.history.list()
         self.conversation_id = rows[0]["id"] if rows else self.core.history.create()
@@ -104,12 +116,29 @@ class GUIManager(QMainWindow):
         self.metrics.start()
         self.voice_restart_timer=QTimer(self);self.voice_restart_timer.setSingleShot(True)
         self.voice_restart_timer.timeout.connect(self.resume_continuous_listening)
+        if self.auth.authenticated:self._start_authenticated()
+
+    def _start_authenticated(self):
+        if not self.auth.authenticated or self.closing:return
+        config=self.config
+        self.updates.start()
+        if self.spotify_poller.thread.ident is None:self.spotify_poller.thread.start()
+        self.desktop_orb.reposition(config.get('desktop_orb_corner'))
+        self.desktop_orb.setVisible(config.get('desktop_orb_enabled'))
+        self.orb_btn.setChecked(config.get('desktop_orb_enabled'))
+        self.voice_output.preload()
         if config.get('voice_mode')=='continua' and config.get('voice_background_listening'):
             if self.core.spotify.cache.path.exists():QTimer.singleShot(0,self.sections.spotify_embed.start)
             self.voice_restart_timer.start(500)
-        if config.get("telegram_enabled"):
-            self.telegram.start()
+        self._resume_service(self.telegram,'telegram_enabled')
+        self._resume_service(self.local_remote,'local_remote_enabled')
         if self.sections.whatsapp_embed.profile.is_dir():QTimer.singleShot(0,self.sections.whatsapp_embed.start)
+
+    def _resume_service(self,service,key):
+        if self.closing or not self.auth.authenticated or not self.config.get(key):return
+        if service.running and service.stop_event.is_set():
+            QTimer.singleShot(200,lambda:self._resume_service(service,key));return
+        if not service.running:service.start()
 
     def emit(self, kind, payload):
         self.events.put((kind, payload))
@@ -123,7 +152,18 @@ class GUIManager(QMainWindow):
     def build(self):
         from victor.gui.panels import card, label, button
         self.outer=QWidget(); self.outer.setObjectName('outer'); self.setCentralWidget(self.outer)
-        self.outer_layout=QHBoxLayout(self.outer); self.outer_layout.setContentsMargins(24,22,24,22); self.outer_layout.setSpacing(0)
+        self.window_stack=QStackedWidget(self.outer)
+        outer_box=QVBoxLayout(self.outer); outer_box.setContentsMargins(0,0,0,0); outer_box.addWidget(self.window_stack)
+        self.main_app_widget=QWidget(); self.main_app_widget.setObjectName('mainApp')
+        self.outer_layout=QHBoxLayout(self.main_app_widget); self.outer_layout.setContentsMargins(24,22,24,22); self.outer_layout.setSpacing(0)
+        self.login_overlay=LoginOverlay(self.auth,self)
+        self.login_overlay.authenticated.connect(self.on_login_success)
+        self.window_stack.addWidget(self.main_app_widget)
+        self.window_stack.addWidget(self.login_overlay)
+        if not self.auth.authenticated and not self.auth.check_saved_session():
+            self.window_stack.setCurrentWidget(self.login_overlay)
+        else:
+            self.window_stack.setCurrentWidget(self.main_app_widget)
         self.sidebar=QFrame(); self.sidebar.setObjectName('sidebar'); self.sidebar.setFixedWidth(220)
         sl=QVBoxLayout(self.sidebar); sl.setContentsMargins(13,22,13,18); sl.setSpacing(5)
         brand_row=QHBoxLayout(); brand_mark=QLabel(); brand_mark.setPixmap(icon('brand',size=34).pixmap(34,34));brand_row.addWidget(brand_mark)
@@ -131,14 +171,18 @@ class GUIManager(QMainWindow):
         self.brand_text=brand
         brand.setStyleSheet('font-size:18px;'); brand.setMinimumHeight(38); brand_row.addWidget(brand,1); sl.addLayout(brand_row)
         self.brand_caption=label('ASISTENTE\nPERSONAL','caption'); self.brand_caption.setStyleSheet('font-size:9px; color:#9196A5; letter-spacing:2px;');self.brand_caption.setContentsMargins(42,0,0,12); sl.addWidget(self.brand_caption)
-        self.nav_buttons={}; self.nav_labels={}
-        for key,name,glyph in [('home','Inicio','home'),('voice','Voz','mic'),('windows','Herramientas','grid'),('memory','Memoria','memory'),
-            ('history','Historial','clock'),('spotify','Conexiones','link'),('codex','Agentes de programación','terminal'),('security','Seguridad','shield'),('ia','Ajustes','settings')]:
-            w=button(name,lambda checked=False,k=key:self.navigate(k),glyph); w.setObjectName('nav'); w.setCheckable(True); w.setMinimumHeight(46)
+        self.nav_buttons={}; self.nav_labels={};self.nav_headers=[]
+        headings={'home':'ASISTENTE','history':'TU ESPACIO','windows':'TRABAJO','security':'CONFIGURACIÓN'}
+        for key,name,glyph in [('home','Inicio','home'),('voice','Voz','mic'),('history','Historial','clock'),('memory','Memoria','memory'),
+            ('windows','Herramientas','grid'),('spotify','Conexiones','link'),('codex','Agentes de programación','terminal'),('security','Seguridad','shield'),('ia','Ajustes','settings')]:
+            if key in headings:
+                heading=label(headings[key],'caption');heading.setStyleSheet('font-size:9px; color:#9196A5; padding:5px 12px 0px;');sl.addWidget(heading);self.nav_headers.append(heading)
+            w=button(name,lambda checked=False,k=key:self.navigate(k),glyph); w.setObjectName('nav'); w.setCheckable(True); w.setMinimumHeight(38)
             self.nav_buttons[key]=w; self.nav_labels[key]=name; sl.addWidget(w)
-            if key=='codex':w.setText('Agentes de\nprogramación')
-            if key=='windows':w.hide()
-        sl.addStretch(); self.sidebar_connection=label('● IA sin verificar','caption'); sl.addWidget(self.sidebar_connection)
+        sl.addStretch()
+        self.lock_nav=button('Bloquear app',self.lock_session,'lock')
+        self.lock_nav.setObjectName('lockBtn'); self.lock_nav.setFixedHeight(34); sl.addWidget(self.lock_nav)
+        self.sidebar_connection=label('● IA sin verificar','caption'); sl.addWidget(self.sidebar_connection)
         self.outer_layout.addWidget(self.sidebar)
         self.shell=QWidget(); self.shell.setObjectName('shell'); shell=QVBoxLayout(self.shell); shell.setContentsMargins(0,0,0,0); shell.setSpacing(0)
         self.outer_layout.addWidget(self.shell,1)
@@ -147,9 +191,14 @@ class GUIManager(QMainWindow):
         self.menu=button('',self.toggle_drawer,'list'); self.menu.setObjectName('compact'); self.menu.setFixedWidth(32); header.addWidget(self.menu)
         self.breadcrumb=button('Inicio  │  Inicio',self.section_menu);self.breadcrumb.setStyleSheet('border:0; background:transparent; text-align:left; padding:0;');self.breadcrumb.setToolTip('Elegir una vista de esta sección'); header.addWidget(self.breadcrumb,1)
         self.breadcrumb.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Preferred)
+        self.orb_btn=button('Orbe voz',self.toggle_desktop_orb,'wave')
+        self.orb_btn.setObjectName('orbBtn'); self.orb_btn.setCheckable(True); self.orb_btn.setChecked(True)
+        self.orb_btn.setToolTip('Activar o desactivar orbe flotante en el escritorio')
+        header.addWidget(self.orb_btn)
         self.present_button=button('Modo presentación · F11',self.toggle_presentation,'screen'); header.addWidget(self.present_button)
         self.command_input=QLineEdit(); self.command_input.setPlaceholderText('Buscar comando  Ctrl + K'); self.command_input.setFixedWidth(190)
         self.command_input.returnPressed.connect(self.command_from_header); header.addWidget(self.command_input)
+        self.lock_header_btn=button('',self.lock_session,'lock'); self.lock_header_btn.setObjectName('lockBtn'); self.lock_header_btn.setFixedWidth(30); self.lock_header_btn.setToolTip('Bloquear sesión'); header.addWidget(self.lock_header_btn)
         self.notice_button=button('',self.show_notices,'list');self.notice_button.setObjectName('compact');self.notice_button.setFixedWidth(30);self.notice_button.setToolTip('Ver avisos recientes');header.addWidget(self.notice_button)
         self.window_controls={}
         for action,callback in [('minimize',self.animate_minimize),('maximize',self.toggle_maximize),('close',self.close)]:
@@ -273,6 +322,8 @@ class GUIManager(QMainWindow):
         self.brand_text.setVisible(not narrow)
         self.sidebar_connection.setVisible(not narrow)
         for key,w in self.nav_buttons.items(): w.setText('' if narrow else 'Agentes de\nprogramación' if key=='codex' else self.nav_labels[key]); w.setToolTip(self.nav_labels[key])
+        for heading in self.nav_headers:heading.setVisible(not narrow)
+        if hasattr(self,'lock_nav'):self.lock_nav.setText('' if narrow else 'Bloquear app')
         self.root.layout().setContentsMargins(16 if narrow else 50,24 if narrow else 46,16 if narrow else 50,20 if narrow else 44)
         for column in range(4): self.quick.setColumnStretch(column,1 if not narrow or column<2 else 0)
         for i,w in enumerate(self.quick_buttons): self.quick.addWidget(w,i//(2 if narrow else 4),i%(2 if narrow else 4))
@@ -281,6 +332,8 @@ class GUIManager(QMainWindow):
         self.send_button.setText('' if compact else 'Enviar');self.send_button.setFixedWidth(40 if compact else 90);self.send_button.setToolTip('Enviar')
         self.mic.setFixedWidth(36 if compact else 46)
         self.command_input.setVisible(self.width()>=800); self.present_button.setVisible(self.width()>=650)
+        if hasattr(self,'orb_btn'):self.orb_btn.setVisible(self.width()>=750)
+        if hasattr(self,'lock_header_btn'):self.lock_header_btn.setVisible(self.width()>=600)
         self.stop_button.setText('' if compact else 'Detener');self.stop_button.setToolTip('Detener')
 
     def resizeEvent(self,event):
@@ -307,6 +360,40 @@ class GUIManager(QMainWindow):
     def quick_open(self): self.navigate('windows')
 
     def show_voice(self,enabled): self.navigate('voice' if enabled else 'home')
+
+    def on_login_success(self):
+        if not self.auth.authenticated:return
+        self.window_stack.setCurrentWidget(self.main_app_widget)
+        self.arrange_metrics()
+        self._start_authenticated()
+
+    def lock_session(self):
+        self.auth.lock_session()
+        admin=getattr(self.settings,'admin_dialog',None)
+        if admin:admin.table.setRowCount(0);admin.close()
+        if self.update_dialog:self.update_dialog.close()
+        self.voice_restart_timer.stop();self.stop()
+        self.telegram.stop();self.local_remote.stop()
+        self.sections.whatsapp_embed.stop();self.sections.spotify_embed.stop()
+        self.desktop_orb.reset();self.desktop_orb.hide()
+        self.login_overlay.refresh_mode()
+        self.window_stack.setCurrentWidget(self.login_overlay)
+
+    def toggle_desktop_orb(self):
+        if not self.auth.authenticated:return
+        if not hasattr(self, 'desktop_orb'):
+            return
+        if self.desktop_orb.isVisible():
+            self.desktop_orb.hide()
+            if hasattr(self, 'orb_btn'):
+                self.orb_btn.setChecked(False)
+        else:
+            self.desktop_orb.reposition()
+            self.desktop_orb.show()
+            if hasattr(self, 'orb_btn'):
+                self.orb_btn.setChecked(True)
+        self.config.save({'desktop_orb_enabled':self.desktop_orb.isVisible()})
+        if 'desktop_orb_enabled' in self.settings.fields:self.settings.fields['desktop_orb_enabled'].setChecked(self.desktop_orb.isVisible())
 
     def toggle_maximize(self):self.window_transitions.start('restore' if self.isMaximized() else 'maximize')
 
@@ -336,11 +423,11 @@ class GUIManager(QMainWindow):
         menu.exec(self.breadcrumb.mapToGlobal(self.breadcrumb.rect().bottomLeft()))
 
     def run_tool(self,name,args):
-        if self.closing: return
+        if self.closing or not self.auth.authenticated: return
         if not self.tool_worker.submit(name,args): self.error_label.setText('Hay demasiadas tareas pendientes. Espera o detén la operación.')
 
     def spotify_command(self,name,args):
-        if self.closing: return False
+        if self.closing or not self.auth.authenticated: return False
         accepted=self.spotify_controls.submit(name,args,coalesce=name=='spotify_volume')
         if not accepted: self.error_label.setText('La cola de Spotify está llena. Espera antes de volver a pulsar.')
         return accepted
@@ -349,6 +436,7 @@ class GUIManager(QMainWindow):
         return bool(self.confirmation_target and not self.confirmation_target.done.is_set())
 
     def listen_approval(self):
+        if not self.auth.authenticated:return
         pending = next((card for card in reversed(self.approvals) if not card.request.done.is_set()), None)
         if not pending:
             return
@@ -419,6 +507,9 @@ class GUIManager(QMainWindow):
         self.send(text, voice=True)
 
     def refresh_config(self):
+        self.desktop_orb.reposition(self.config.get('desktop_orb_corner'))
+        self.desktop_orb.setVisible(self.auth.authenticated and self.config.get('desktop_orb_enabled'))
+        if hasattr(self,'orb_btn'):self.orb_btn.setChecked(self.config.get('desktop_orb_enabled'))
         provider = self.config.get("provider")
         credential_error = ""
         account_status='Error de sesión'
@@ -542,6 +633,7 @@ class GUIManager(QMainWindow):
         self.auth_thread.start()
 
     def send(self, text=None, direct_tool=None, origin=None, voice=False):
+        if not self.auth.authenticated:return False
         if self.closing or self.core.busy.is_set() or self.images.busy or self.images.pending:
             return
         if isinstance(text, bool) or text is None:
@@ -584,6 +676,7 @@ class GUIManager(QMainWindow):
             card.resolve(False)
 
     def toggle_mic(self):
+        if not self.auth.authenticated:return
         if self.config.get("voice_mode") != "push-to-talk":
             self.voice_restart_timer.stop()
             self.voice_input.stop() if self.voice_input.running else self.start_mic()
@@ -594,6 +687,7 @@ class GUIManager(QMainWindow):
         self.voice_output.end_interaction()
 
     def test_microphone(self):
+        if not self.auth.authenticated:return
         if self.closing or self.voice_diagnostic_active:return
         if self.core.busy.is_set():
             self.error_label.setText('Espera a que termine la petición actual antes de probar el micrófono.');return
@@ -606,7 +700,7 @@ class GUIManager(QMainWindow):
         deadline=time.monotonic()+12
         def begin():
             if self.closing:return
-            if self.voice_input.running:
+            if self.voice_input.running or self.voice_output.busy:
                 if time.monotonic()<deadline:QTimer.singleShot(50,begin)
                 else:
                     self.voice_diagnostic_active=False;self.error_label.setText('El micrófono anterior aún está cerrándose. Vuelve a probar al terminar.')
@@ -617,6 +711,7 @@ class GUIManager(QMainWindow):
         begin()
 
     def queue_continuous_listening(self):
+        if not self.auth.authenticated:return
         if self.config.get('voice_mode')=='continua' and not self.closing:
             if self.config.get('voice_background_listening') and self.core.spotify.cache.path.exists() and self.sections.spotify_embed.process is None:
                 self.sections.spotify_embed.start()
@@ -652,6 +747,7 @@ class GUIManager(QMainWindow):
         self.voice_input.start()
 
     def mic_press(self):
+        if not self.auth.authenticated:return
         if self.config.get("voice_mode") == "push-to-talk":
             self.start_mic()
 
@@ -749,6 +845,8 @@ class GUIManager(QMainWindow):
         self.summary_title.setStyleSheet(state_style(state))
         self.metric_values['state'].setText(state)
         self.voice_panel.set_state(state)
+        if hasattr(self,'desktop_orb'):
+            self.desktop_orb.set_state(state)
 
     def activity_state(self):
         """Un resultado secundario no oculta una respuesta de voz en curso."""
@@ -799,6 +897,16 @@ class GUIManager(QMainWindow):
             self.voice_output.speak(phrase)
 
     def handle_event(self, kind, payload):
+        if kind=='update_available':
+            if not self.auth.authenticated or payload['version'] in self.notified_versions:return
+            from .updates import UpdateDialog
+            self.notified_versions.add(payload['version']);self.update_dialog=UpdateDialog(self.updates,payload,self);self.update_dialog.show();return
+        if kind=='update_progress':
+            if self.update_dialog:self.update_dialog.progress.setValue(payload)
+            return
+        if kind=='update_status':
+            if self.auth.authenticated:self.error_label.setText(payload)
+            return
         if kind in ('voice_wake','voice_interrupt'):
             if self.closing or self.voice_input.stop_event.is_set():
                 payload.set()
@@ -962,6 +1070,7 @@ class GUIManager(QMainWindow):
             if listening: self.voice_panel.prompt.setText(payload)
         elif kind == 'mic_level':
             self.wave.set_level(payload);self.voice_panel.set_input_level(payload)
+            if hasattr(self,'desktop_orb'):self.desktop_orb.set_user_level(payload)
         elif kind == 'voice_audio_status':
             self.voice_panel.audio_processing.setText(payload)
         elif kind == 'voice_diagnostic_text':
@@ -974,6 +1083,7 @@ class GUIManager(QMainWindow):
             self.voice_diagnostic_resume=False
         elif kind == 'tts_level':
             self.voice_panel.set_output_level(payload)
+            if hasattr(self,'desktop_orb'):self.desktop_orb.set_bot_level(payload)
         elif kind == 'tts_meter':
             self.voice_panel.output_meter.setText('Nivel de voz no disponible en este motor/versión; el audio sigue funcionando.' if not payload else 'Voz de VICTOR · nivel real de audio')
         elif kind == "speech_status":
@@ -1016,6 +1126,7 @@ class GUIManager(QMainWindow):
         if not self.closing and not self.closed_cleanly and hasattr(self,'window_transitions') and not self.window_transitions.close_visual_done and (self.isVisible() or self.window_transitions.running):
             event.ignore();self.window_transitions.start('close');return
         if self.closed_cleanly:
+            if hasattr(self,'desktop_orb'):self.desktop_orb.close()
             self.poll_timer.stop()
             self.wave.set_active(False)
             self.voice_panel.input_wave.set_active(False);self.voice_panel.mic.set_active(False)
@@ -1024,6 +1135,7 @@ class GUIManager(QMainWindow):
             return
         event.ignore()
         if not self.closing:
+            if hasattr(self,'desktop_orb'):self.desktop_orb.close()
             self.maintenance.stop()
             self.images.shutdown()
             for page in self.agent_pages.values():page.shutdown()
@@ -1043,6 +1155,8 @@ class GUIManager(QMainWindow):
             self.local_remote.stop()
             self.spotify_poller.stop_event.set()
             self.voice_output.close()
+            self.updates.stop()
+            threading.Thread(target=self.core.ai.close,name='victor-ai-close',daemon=True).start()
             self.metrics.stop_event.set()
             self.entry.setEnabled(False)
             self.send_button.setEnabled(False)

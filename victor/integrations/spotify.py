@@ -415,7 +415,10 @@ def catalog_item(row, kind):
     uri = row.get('uri') or 'spotify:'+kind+':'+str(row.get('id') or '')
     return {'id':row.get('id') or '', 'kind':kind, 'name':row.get('name') or 'Sin título',
             'subtitle':subtitle, 'image':image, 'uri':uri, 'url':(row.get('external_urls') or {}).get('spotify') or '',
-            'duration':row.get('duration_ms',0), 'available':not row.get('is_local',False) and row.get('is_playable') is not False and not row.get('restrictions') and bool(re.fullmatch(r'spotify:(track|episode|playlist|album|show):[A-Za-z0-9]{22}',uri))}
+            'duration':row.get('duration_ms',0),
+            'artist_names':[a.get('name','') for a in row.get('artists',[]) if a.get('name')],
+            'release_date':row.get('release_date') or (row.get('album') or {}).get('release_date',''),
+            'available':not row.get('is_local',False) and row.get('is_playable') is not False and not row.get('restrictions') and bool(re.fullmatch(r'spotify:(track|episode|playlist|album|show):[A-Za-z0-9]{22}',uri))}
 
 
 def catalog_request(request, playlist=False):

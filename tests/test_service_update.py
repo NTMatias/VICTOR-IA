@@ -132,7 +132,7 @@ global.Spotify={Player:class{constructor(){this.listeners={};}addListener(n,f){t
 class ServiceViews(unittest.TestCase):
     def test_service_cards_navigation_and_close(self):
         from PySide6.QtWidgets import QApplication
-        from victor.gui.app import GUIManager
+        from tests.gui_support import authenticated_gui as GUIManager
         q=QApplication.instance() or QApplication([]);q.setQuitOnLastWindowClosed(False)
         def pump(seconds=.1):
             end=time.monotonic()+seconds
@@ -140,7 +140,8 @@ class ServiceViews(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             app=GUIManager(ConfigManager(Path(folder)))
             try:
-                app.show();pump();self.assertTrue(app.nav_buttons['windows'].isHidden())
+                app.show();pump();self.assertTrue(app.nav_buttons['windows'].isVisible())
+                self.assertEqual(app.nav_labels['windows'],'Herramientas')
                 s=app.sections
                 s.tool_result('google_unread',{'ok':True,'result':{'correos_no_leidos':[{'asunto':'Prueba de correo','remitente':'Persona <test@example.com>','resumen':'Contenido de prueba','fecha':'Sat, 17 Oct 2026 11:45:00 -0500','thread_id':'t1'}]}})
                 self.assertEqual(s.google_tabs.currentIndex(),1);self.assertEqual(s.mail_results.count(),1)

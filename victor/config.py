@@ -18,15 +18,17 @@ DEFAULTS = {
     "gemini_account_enabled": False,
     "models": {"OpenAI": "gpt-4.1-mini", "Anthropic": "claude-sonnet-4-20250514",
                "Gemini": "gemini-3.8-flash", "Ollama": "qwen2.5:7b"},
-    "fallback": [], "temperature": 0.5, "max_tokens": 2048,
+    "fallback": [], "temperature": 0.5, "max_tokens": 2048, "ai_reasoning_effort": "low",
     "name": "VICTOR.IA", "personality": "Atento, preciso, práctico y con humor discreto.",
     "formality": "Profesional y cercano", "language": "es-EC",
     "system_prompt": "Responde con concisión salvo que el usuario pida detalle.",
     "theme": "Dark", "security": "normal", "action_confirmations": True, "voice_enabled": False,
-    "voice_id": "", "voice_rate": 175, "voice_mode": "manual",
+    "voice_id": "", "voice_rate": 180, "voice_pitch": "+0Hz", "speech_dictionary": {}, "voice_mode": "manual",
     "voice_backend": "whisper", "whisper_model": "base", "wake_word": "VICTOR",
     "openai_transcription_model": "gpt-transcribe",
     "voice_background_listening": False,
+    "desktop_orb_enabled":True,"desktop_orb_corner":"bottom-right",
+    "desktop_orb_position":None,
     "voice_noise_reduction": True, "voice_echo_cancellation": True, "voice_noise_level": "moderado",
     "microphone": "", "vision_provider": "OpenAI", "vision_model": "gpt-4.1-mini",
     "ollama_url": "http://127.0.0.1:11434", "context_chars": 24000,
@@ -34,7 +36,7 @@ DEFAULTS = {
     "auto_search": True, "network_timeout": 30,
     "ollama_light": False, "ollama_keep_alive": "5m", "ollama_timeout": 180,
     "ollama_gpu": "auto", "ollama_context": 4096,
-    "tts_backend": "edge", "edge_voice": "es-MX-JorgeNeural", "conversation_window": 45,
+    "tts_backend": "edge", "edge_voice": "es-EC-LuisNeural", "conversation_window": 45,
     "voice_vocabulary": "VICTOR, Victoria, Spotify, Google, Chrome",
     "voice_corrections": "",
     "telegram_enabled": False, "telegram_allowed_ids": [], "telegram_paused": False,
@@ -44,16 +46,18 @@ DEFAULTS = {
 
 
 class ConfigManager:
-    def __init__(self, root: Path = ROOT):
+    def __init__(self, root: Path = ROOT, data_dir: Path | None = None):
         self.root = root
-        self.data_dir = root / "data"
+        self.profile_scoped=data_dir is not None
+        self.data_dir = Path(data_dir) if data_dir is not None else root / "data"
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        (root / "workspace").mkdir(exist_ok=True)
+        workspace=self.data_dir/'workspace' if self.profile_scoped else root/'workspace'
+        workspace.mkdir(parents=True,exist_ok=True)
         load_dotenv(root / ".env", override=False)
         self.path = self.data_dir / "config.json"
         self.lock = threading.RLock()
         self.data = copy.deepcopy(DEFAULTS)
-        self.data["allowed_folders"] = [str(root / "workspace")]
+        self.data["allowed_folders"] = [str(workspace)]
         self.warning = ""
         from victor.credentials import CredentialStore
         self.credentials = CredentialStore(self.data_dir / "ai_keys.dpapi")
@@ -66,6 +70,8 @@ class ConfigManager:
                 if isinstance(candidate.get('auth_methods'), dict):
                     candidate['auth_methods']['Gemini'] = 'api'
                 candidate['gemini_account_enabled'] = False
+                candidate['tts_backend']='edge'
+                if not candidate.get('edge_voice'):candidate['edge_voice']='es-EC-LuisNeural'
                 self.validate(candidate)
                 self.data = candidate
             except (ValueError, OSError, TypeError, VictorError):
@@ -117,6 +123,11 @@ class ConfigManager:
                    "voice_mode": ("manual", "push-to-talk", "continua"), "voice_backend": ("google", "whisper", "openai"),
                    "openai_transcription_model": ("gpt-transcribe", "gpt-4o-transcribe", "gpt-4o-mini-transcribe")}
         choices['voice_noise_level']=('suave','moderado','intenso')
+        choices['ai_reasoning_effort']=('low','medium','high')
+        choices['desktop_orb_corner']=('bottom-right','bottom-left','top-right','top-left')
+        if not isinstance(d['desktop_orb_enabled'],bool):raise VictorError('Visibilidad del orbe inválida.')
+        position=d['desktop_orb_position']
+        if position is not None and (not isinstance(position,list) or len(position)!=2 or any(type(v) is not int or abs(v)>100000 for v in position)):raise VictorError('Posición del orbe inválida.')
         for k, allowed in choices.items():
             if d[k] not in allowed:
                 raise VictorError(f"Valor inválido: {k}.")
@@ -125,8 +136,14 @@ class ConfigManager:
                 raise VictorError(f"{k} debe ser verdadero o falso.")
         if not isinstance(d["ollama_light"], bool) or d["ollama_gpu"] not in ("auto", "cpu"):
             raise VictorError("Perfil Ollama inválido.")
-        if d["tts_backend"] not in ("edge", "sapi") or not isinstance(d["edge_voice"], str):
+        if d["tts_backend"] != "edge" or not isinstance(d["edge_voice"], str):
             raise VictorError("Configuración de salida de voz inválida.")
+        if not re.fullmatch(r'[a-z]{2}-[A-Z]{2}-[A-Za-z]+Neural',d['edge_voice']):
+            raise VictorError('Identificador de voz Edge inválido.')
+        if not isinstance(d['voice_pitch'],str) or not re.fullmatch(r'[+-]\d{1,2}Hz',d['voice_pitch']):
+            raise VictorError('Tono de voz: usa por ejemplo +0Hz.')
+        if not isinstance(d['speech_dictionary'],dict) or len(d['speech_dictionary'])>100 or any(not isinstance(k,str) or not isinstance(v,str) or not k or len(k)>80 or len(v)>200 for k,v in d['speech_dictionary'].items()):
+            raise VictorError('Diccionario de pronunciación inválido.')
         for key in ("telegram_enabled", "telegram_paused", "remote_block_all", "local_remote_enabled"):
             if not isinstance(d[key], bool):
                 raise VictorError("Configuración remota inválida.")
@@ -177,9 +194,9 @@ class ConfigManager:
     def api_key(self, provider):
         if provider not in KEYS:
             return ""
-        return self.credentials.get(provider) or os.environ.get(KEYS[provider], "").strip()
+        return self.credentials.get(provider) or (os.environ.get(KEYS[provider], "").strip() if not self.profile_scoped else '')
 
     def credential_source(self, provider):
         if self.credentials.get(provider):
             return "Clave personal guardada · cifrada en Windows"
-        return "Clave desde .env / entorno" if os.environ.get(KEYS[provider], "").strip() else "Sin clave configurada"
+        return "Clave desde .env / entorno" if not self.profile_scoped and os.environ.get(KEYS[provider], "").strip() else "Sin clave configurada"

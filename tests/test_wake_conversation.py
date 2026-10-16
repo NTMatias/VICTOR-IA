@@ -146,11 +146,12 @@ class SpeechEncoding(unittest.TestCase):
         phrase = '¿En qué te ayudo? Canción, acción, café, niño y pingüino.'
         script = '''import json
 from victor.voice import output
-def fake_sapi(payload, path=None):
-    print(json.dumps(payload['text'], ensure_ascii=True))
-    if path is not None: path.write_bytes(b'x' * 45)
-output.speak_sapi = fake_sapi
-output.play_audio = lambda path: None
+class FakeVoice:
+    def __init__(self,*args):pass
+    def speak(self,text,force=False,completed=None):
+        print(json.dumps(text, ensure_ascii=True));completed.set()
+    def close(self):pass
+output.VoiceOutput = FakeVoice
 output.speak_worker()
 '''
         env = dict(os.environ, PYTHONIOENCODING='cp1252')
@@ -175,7 +176,9 @@ class HandsfreeApproval(unittest.TestCase):
             return check()
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
             cfg=ConfigManager(Path(folder));cfg.save({'voice_mode':'continua','voice_backend':'google'})
-            app=GUIManager(cfg);send_mail=Mock(return_value={'sent':True})
+            from victor.auth import AuthManager
+            auth=AuthManager(cfg.data_dir);auth.setup('fixture-password')
+            app=GUIManager(cfg,auth=auth);send_mail=Mock(return_value={'sent':True})
             app.core.registry.tools['google_send_email'].function=send_mail
             app.voice_output.speak=Mock()
             try:

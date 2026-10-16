@@ -29,8 +29,10 @@ class ContextManager:
         if sum(len(r["content"]) for r in unsummarized) > budget:
             # Siempre conserva al menos los últimos seis mensajes.
             split = max(0, len(unsummarized)-6)
-            while split > 0 and sum(len(r["content"]) for r in unsummarized[split-1:]) < budget//2:
+            recent_size=sum(len(r['content']) for r in unsummarized[split:])
+            while split > 0 and recent_size+len(unsummarized[split-1]['content']) < budget//2:
                 split -= 1
+                recent_size+=len(unsummarized[split]['content'])
             if split:
                 old = unsummarized[:split]
                 summary = self.extractive_summary(meta["summary"], old)

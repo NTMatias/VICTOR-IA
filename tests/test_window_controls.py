@@ -7,7 +7,7 @@ from unittest.mock import Mock
 from PySide6.QtCore import QPoint,QRect
 from PySide6.QtWidgets import QApplication,QLabel
 from victor.config import ConfigManager
-from victor.gui.app import GUIManager
+from tests.gui_support import authenticated_gui as GUIManager
 from victor.gui.widgets import ActionTile
 
 

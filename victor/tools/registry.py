@@ -36,6 +36,7 @@ class ToolRegistry:
     def execute(self, name, args, notify_validation=True):
         start = time.monotonic()
         try:
+            if not getattr(self,'access_check',lambda:True)():raise VictorError('La aplicación está bloqueada. Inicia sesión para continuar.')
             check_cancel(self.cancel)
             tool = self.tools.get(name)
             if tool is None:
@@ -71,6 +72,7 @@ class ToolRegistry:
             check_cancel(self.cancel)
             self.emit("status", "Ejecutando " + name)
             self.security.validate_origin()
+            if not getattr(self,'access_check',lambda:True)():raise VictorError('La aplicación se bloqueó; no se ejecutó la acción.')
             result = tool.function(**args)
             self.log.info("tool=%s result=success seconds=%.2f", name, time.monotonic()-start)
             return {"ok": True, "result": result}

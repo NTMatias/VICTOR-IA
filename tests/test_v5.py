@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 from PySide6.QtWidgets import QApplication
 from victor.config import ConfigManager
-from victor.gui.app import GUIManager
+from tests.gui_support import authenticated_gui as GUIManager
 from victor.gui.maintenance import audit_rows
 from victor.voice.models import cached_model, model_directory, complete
 from victor.voice.wakeword import extract_command

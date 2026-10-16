@@ -59,8 +59,12 @@ class AIManager:
                 mode_label='ChatGPT · cuenta' if account_mode else name
                 self.emit("connection", f"Conectando con {mode_label}…")
                 provider=self.account_providers[name] if account_mode else self.providers[name]
-                reply = provider.stream(messages, system, specs, request_cfg,
-                              on_token or (lambda t: self.emit("token", t)), cancel, image)
+                first=[False]
+                def token(value):
+                    if not first[0]:
+                        first[0]=True;self.log.info('provider=%s first_text_seconds=%.3f',name,time.monotonic()-start)
+                    (on_token or (lambda t:self.emit('token',t)))(value)
+                reply = provider.stream(messages, system, specs, request_cfg,token, cancel, image)
                 check_cancel(cancel)
                 self.log.info("provider=%s success seconds=%.2f", name, time.monotonic()-start)
                 self.emit("connection", f"Conectado · {mode_label}")
@@ -98,3 +102,7 @@ class AIManager:
                 self.emit("stream_reset", None)
         self.emit("connection", "Sin conexión a IA")
         raise VictorError("\n".join(errors))
+
+    def close(self):
+        for provider in list(self.providers.values())+list(self.account_providers.values()):
+            if hasattr(provider,'close'):provider.close()

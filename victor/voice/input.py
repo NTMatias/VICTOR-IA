@@ -91,9 +91,9 @@ class VoiceInput:
                         self.emit('notice','Hubo una interrupción en el audio del micrófono. Repite la petición; no se ejecutó audio incompleto.')
                         return ''
                 rms=float(np.sqrt(np.mean(block.astype(np.float32)**2)))
-                self.emit('mic_level',min(1.,rms/6000.))
                 duration=len(block)/16000.
                 speech=self.detector.is_voice(block)
+                self.emit('mic_level',min(1.,rms/6000.) if speech else 0.)
                 if speech:
                     if not samples:samples.extend(pre);pre.clear()
                     samples.append(block);voiced+=duration;silence=0.

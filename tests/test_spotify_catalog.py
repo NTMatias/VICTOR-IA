@@ -111,13 +111,13 @@ global.fetch=async(path,opts)=>{const request=JSON.parse(opts.body||'{}');calls.
 (async()=>{
  await new Promise(r=>setTimeout(r,0));assert.equal(elements.get('library').children.length,1);
  await elements.get('library').children[0].onclick();assert.equal(elements.get('results').children.length,3);
- assert.deepEqual(calls.filter(c=>c.tool==='spotify_collection').map(c=>c.args.offset),[0,50]);
+ assert.deepEqual(calls.filter(c=>c.tool==='spotify_collection').map(c=>c.args.offset).slice(-2),[0,50]);
  assert.equal(calls.filter(c=>c.tool==='spotify_item_play').length,0);
  ready=true;player={activateElement(){}};await choose(track);
  assert.deepEqual(calls.find(c=>c.tool==='spotify_item_play').args,{uri:track.uri,context:track.context,position:52});
  const count=calls.length;await choose({...track,available:false});assert.equal(calls.length,count);
  elements.get('search').value='gamina';await searchCatalog();await searchCatalog(nextSearch);
- assert.equal(calls.filter(c=>c.tool==='spotify_search')[1].args.offset,10);
+ assert.equal(calls.filter(c=>c.tool==='spotify_search'&&c.args.query==='gamina')[1].args.offset,10);
  elements.get('search').value='old';const old=searchCatalog();await new Promise(r=>setTimeout(r,0));
  elements.get('search').value='new';await searchCatalog();stale();await old;
  assert.equal(elements.get('results').children[1].children[2].children[0].children[0].textContent,'GAMINA');

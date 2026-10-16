@@ -104,7 +104,7 @@ class SpotifyEmbed(QWidget):
     def apply_theme(self):
         from victor.gui.theme import is_light
         light=is_light(self.app.config.get('theme'))
-        self.surface.setStyleSheet('background:'+('#F6F7FA' if light else '#15171C')+';')
+        self.surface.setStyleSheet('background:'+('#F1ECF9' if light else '#211E32')+';border-radius:20px;')
         theme='light' if light else 'dark'
         if self.loaded and theme!=self.browser_theme:
             if self.command({'command':'probe','script':"document.documentElement.dataset.theme="+json.dumps(theme)}):self.browser_theme=theme

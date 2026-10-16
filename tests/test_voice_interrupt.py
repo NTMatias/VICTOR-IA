@@ -153,22 +153,20 @@ class InterruptOutput(unittest.TestCase):
         self.assertFalse(VoiceOutput.is_speech_echo(voice,'VICTOR pausa la canción'))
 
     def test_real_child_and_music_lease_survive_interruption_and_reply_wait(self):
-        script='''from victor.voice import output
-from victor.voice.levels import report_meter
-import time
-def synth(payload,path=None):
-    if path is not None:path.write_bytes(b'x'*45)
-def play(path):
-    report_meter('tts_level',.5)
-    time.sleep(.4)
-output.speak_sapi=synth
-output.play_audio=play
-output.speak_worker()
-'''
-        real_popen=subprocess.Popen
-        def child(args,**kw):return real_popen([sys.executable,'-c',script],**kw)
+        class Client:
+            def __init__(self,*args):pass
+            def request(self,text,cancelled,warm=False):return {'path':text}
+            def stop(self):pass
+            def close(self):pass
+            def release_audio(self,path):pass
+        def play(path,cancelled,emit,on_stream):
+            emit('tts_level',.5)
+            until=time.monotonic()+.1
+            while time.monotonic()<until:
+                if cancelled():raise Cancelled()
+                time.sleep(.005)
         with tempfile.TemporaryDirectory() as folder:
-            cfg=ConfigManager(Path(folder));cfg.save({'voice_enabled':True,'tts_backend':'sapi'})
+            cfg=ConfigManager(Path(folder));cfg.save({'voice_enabled':True,'tts_backend':'edge'})
             pcm=threading.Event();restored=threading.Event();begins=[]
             class Ducker:
                 @contextmanager
@@ -176,7 +174,7 @@ output.speak_worker()
                     begins.append(1)
                     try:yield True
                     finally:restored.set()
-            with patch('victor.voice.output.subprocess.Popen',side_effect=child):
+            with patch('victor.voice.output.EdgeTTS',Client),patch('victor.voice.output.play_pcm',play):
                 voice=VoiceOutput(cfg,lambda k,v:pcm.set() if k=='tts_level' and v==.5 else None);voice.music_ducker=Ducker()
                 first=threading.Event();second=threading.Event()
                 try:
@@ -190,7 +188,7 @@ output.speak_worker()
                     restored.clear();third=threading.Event()
                     voice.begin_interaction();voice.speak('¿En qué te ayudo?',completed=third)
                     self.assertTrue(third.wait(5));self.assertFalse(restored.is_set())
-                finally:voice.close();voice.thread.join(5)
+                finally:voice.close();voice.thread.join(5);voice.play_thread.join(5)
                 self.assertFalse(voice.thread.is_alive())
                 self.assertTrue(restored.is_set())
 

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication,QLabel,QPlainTextEdit
 from victor.config import ConfigManager
 from victor.core import VictorCore
 from victor.security import Approval,Risk
-from victor.gui.app import GUIManager
+from tests.gui_support import authenticated_gui as GUIManager
 from victor.gui.tool_labels import LABELS,confirmation_details,friendly_name
 from victor.gui.spotify_player import register_player
 from victor.integrations.local_remote import LocalRemote

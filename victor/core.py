@@ -55,6 +55,8 @@ class VictorCore:
         self.log = logging.getLogger("victor.core")
 
     def submit(self, text, conversation_id, direct_tool=None, origin=None):
+        if not getattr(self,'access_check',lambda:True)():
+            self.emit('notice','Inicia sesión para usar VICTOR.');return False
         if self.busy.is_set():
             return False
         if origin and not self.security.origin_authorized(origin):

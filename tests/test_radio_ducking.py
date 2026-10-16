@@ -117,19 +117,21 @@ global.Spotify={Player:class{
 
     def test_real_child_waits_for_volume_gate_and_stop_restores(self):
         # Use the real worker parser/gate, replacing only synthesis and playback.
-        script='''from victor.voice import output
-from victor.voice.levels import report_meter
-def fake_sapi(payload,path=None):
-    if path is not None:path.write_bytes(b'x'*45)
-output.speak_sapi=fake_sapi
-output.play_audio=lambda path:report_meter('tts_level',.5)
-output.speak_worker()
-'''
-        real_popen=subprocess.Popen
-        def child(args,**kwargs):return real_popen([sys.executable,'-c',script],**kwargs)
+        class Client:
+            def __init__(self,*args):pass
+            def request(self,text,cancelled,warm=False):return {'path':text}
+            def stop(self):pass
+            def close(self):pass
+            def release_audio(self,path):pass
+        def play(path,cancelled,emit,on_stream):
+            emit('tts_level',.5)
+            until=time.monotonic()+.1
+            while time.monotonic()<until:
+                if cancelled():raise Cancelled()
+                time.sleep(.005)
         for cancel in (False,True):
             with self.subTest(cancel=cancel),tempfile.TemporaryDirectory() as folder:
-                cfg=ConfigManager(Path(folder));cfg.save({'voice_enabled':True,'tts_backend':'sapi'})
+                cfg=ConfigManager(Path(folder));cfg.save({'voice_enabled':True,'tts_backend':'edge'})
                 begun=threading.Event();release=threading.Event();restored=threading.Event();pcm=threading.Event();finished=threading.Event();events=[]
                 class Ducker:
                     @contextmanager
@@ -137,13 +139,13 @@ output.speak_worker()
                         begun.set()
                         try:
                             while not release.wait(.02):
-                                if cancelled():raise Cancelled('cancel')
+                                if cancelled():raise Cancelled()
                             yield True
                         finally:restored.set()
                 def emit(k,v):
                     events.append((k,v))
                     if k=='tts_level' and v==.5:pcm.set()
-                with patch('victor.voice.output.subprocess.Popen',side_effect=child):
+                with patch('victor.voice.output.EdgeTTS',Client),patch('victor.voice.output.play_pcm',play):
                     voice=VoiceOutput(cfg,emit);voice.music_ducker=Ducker()
                     try:
                         voice.speak('¿En qué te ayudo?',completed=finished)
@@ -153,7 +155,7 @@ output.speak_worker()
                         self.assertTrue(finished.wait(5));self.assertTrue(restored.wait(5))
                         self.assertEqual(pcm.is_set(),not cancel)
                         self.assertFalse(any(k=='error' for k,v in events),events)
-                    finally:voice.close();voice.thread.join(5)
+                    finally:voice.close();voice.thread.join(5);voice.play_thread.join(5)
                     self.assertFalse(voice.thread.is_alive())
 
     def test_loopback_paused_ack_does_not_retain_empty_music_lease(self):

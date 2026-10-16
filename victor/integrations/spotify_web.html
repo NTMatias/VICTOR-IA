@@ -9,6 +9,9 @@
  --primary:#588AD8;--primary-border:#749DE1;background:var(--page);color:var(--text)}
 :root[data-theme=light]{color-scheme:light;--page:#F6F7FA;--surface:#FFFFFF;--input:#F6F7FA;
  --button:#F2F4F8;--border:#D2D8E3;--text:#20242F;--muted:#616B7D;--hover:#E1E7F1;--selected:#D6E0EF}
+/* Same glass palette as the native VICTOR panels; no changes to SDK behavior. */
+:root{--page:#211E32;--surface:rgba(45,43,65,.78);--input:rgba(18,24,39,.62);--button:rgba(80,71,108,.48);--border:rgba(180,167,221,.2);--muted:#B1AAC6;--hover:rgba(131,110,174,.3);--selected:rgba(109,112,184,.35);--accent:#A7B7FF;--primary:#8876CE;--primary-border:#AE9DE6;background:linear-gradient(135deg,#352541,#202A3E 55%,#292238)}
+:root[data-theme=light]{--page:#F1ECF9;--surface:rgba(255,255,255,.73);--input:rgba(255,255,255,.6);--button:rgba(225,214,243,.55);--border:rgba(129,108,161,.25);--muted:#69617A;--hover:#E8DFF6;--selected:#DDD7F3;--accent:#68529E;background:linear-gradient(135deg,#EEE0F5,#E6EFFB 55%,#F5E9F3)}
 *{box-sizing:border-box}body{margin:0;height:100vh;display:grid;grid-template-rows:60px minmax(0,1fr) 32px;overflow:hidden}
 button,input,select{font:inherit}button{cursor:pointer;color:inherit;border:1px solid var(--border);background:var(--button);border-radius:8px;padding:9px 14px}
 button:hover{background:var(--hover);border-color:var(--accent)}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -36,7 +39,23 @@ button:disabled{opacity:.5;cursor:default}a{color:var(--muted);text-decoration:n
 ::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}::-webkit-scrollbar-track{background:transparent}
 @media(max-width:1000px){.workspace{grid-template-columns:200px minmax(0,1fr)}.brand small{display:none}.track-row,.tablehead{grid-template-columns:24px 44px minmax(0,1fr) 48px 26px;gap:10px}.kind{display:none}}
 @media(max-width:680px){body{grid-template-rows:104px minmax(0,1fr) 36px}.top{display:grid;grid-template-columns:auto minmax(0,1fr) auto;padding:8px 10px;gap:8px}.brand{font-size:13px}.top .home{justify-self:start}.top #connect{grid-column:3;grid-row:1;font-size:12px;padding:9px 10px}.searchbox{grid-column:1/-1;grid-row:2;width:100%;max-width:none}.workspace{grid-template-columns:1fr}.sidebar{display:none}.content{padding:12px}.filters{flex-wrap:nowrap;overflow:auto;margin-bottom:12px}.filters button{flex-shrink:0}.viewhead h1{font-size:20px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.track-row,.tablehead{grid-template-columns:20px 38px minmax(0,1fr) 26px;gap:8px}.duration{display:none}.thumb{width:38px;height:38px}.bottom{padding:4px 6px;gap:8px}}
-@media(max-width:400px){.brand span{display:none}.track-row,.tablehead{padding:8px 0}.cards{grid-template-columns:1fr}}
+ @media(max-width:400px){.brand span{display:none}.track-row,.tablehead{padding:8px 0}.cards{grid-template-columns:1fr}}
+button{border-radius:12px;transition:background .16s,border-color .16s,transform .16s}
+.top,.content{border-radius:20px;backdrop-filter:blur(18px)}
+.top{padding:10px 14px;background:linear-gradient(120deg,var(--surface),var(--button));box-shadow:0 6px 20px rgba(13,12,26,.12)}
+.searchbox{border-radius:18px}.workspace{gap:14px}.content{padding:22px}
+.viewhead h1{font-size:28px;letter-spacing:-.6px}.filters button{border-radius:20px;padding:7px 14px}
+.album-card{border-radius:17px;background:linear-gradient(145deg,var(--button),var(--surface));box-shadow:0 6px 16px rgba(13,12,26,.09);padding:14px}
+.album-card:hover{transform:translateY(-3px)}.album-card img{border-radius:12px;object-fit:cover;box-shadow:0 5px 15px rgba(13,12,26,.17)}
+.thumb{border-radius:10px}.library-row,.track-row{border-radius:13px}.bottom{background:transparent}
+.sidebar{--surface:#1D2027;--button:#22252E;--border:#30333E;--muted:#9196A5;--hover:#252A34;--accent:#83AFFF;background:var(--surface);border-radius:12px}
+.sidebar .library-row{border-radius:8px}.sidebar .thumb{border-radius:4px}
+:root[data-theme=light] .sidebar{--surface:#FFFFFF;--button:#F2F4F8;--border:#D2D8E3;--muted:#616B7D;--hover:#E1E7F1;background:var(--surface)}
+.home-feed{display:flex;flex-direction:column;gap:26px}.recommendation-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.recommendation-head h2{font-size:20px;margin:0;letter-spacing:-.3px}.recommendation-note{color:var(--muted);font-size:12px;line-height:1.6;margin:0 0 12px}
+.recommendation-hero{display:flex;align-items:center;gap:22px;padding:22px;border:1px solid var(--border);border-radius:20px;background:linear-gradient(125deg,rgba(131,73,129,.45),var(--surface));min-width:0}.recommendation-hero img{width:148px;height:148px;object-fit:cover;border-radius:14px}.recommendation-hero>div{min-width:0}.recommendation-hero h2{font-size:28px;margin:8px 0;overflow-wrap:anywhere}.recommendation-hero .eyebrow{font-size:10px;letter-spacing:1.3px;color:var(--accent);font-weight:700}.recommendation-hero button{margin-top:12px;background:linear-gradient(110deg,#28C67A,#12935F);border-color:#45D693;color:#fff;font-weight:650;border-radius:24px}
+@media(max-width:680px){.recommendation-hero{padding:16px;gap:14px}.recommendation-hero img{width:88px;height:88px}.recommendation-hero h2{font-size:21px}.recommendation-head h2{font-size:18px}}
+@media(prefers-reduced-motion:reduce){button{transition:none}.album-card:hover{transform:none}}
+@media(max-width:680px){.content{padding:14px}.viewhead h1{font-size:24px}.top{padding:8px 10px}}
 </style></head><body>
 <header class="top"><div class="brand"><img src="logo" alt="Spotify"><span>Spotify <small>EN VICTOR</small></span></div><button id="home" class="home" aria-label="Inicio">⌂</button>
 <form id="search-form" class="searchbox"><span aria-hidden="true">⌕</span><input id="search" autocomplete="off" aria-label="Buscar en Spotify" placeholder="¿Qué quieres escuchar?"><button id="clear-search" type="button" aria-label="Borrar búsqueda">×</button></form><button id="connect" class="green">Activar audio</button></header>
@@ -166,7 +185,7 @@ window.addEventListener('pagehide',()=>{clearTimeout(timer);clearInterval(stateT
 const sdk=document.createElement('script');sdk.src='https://sdk.scdn.co/spotify-player.js';sdk.onerror=()=>message('No se pudo cargar Spotify. Comprueba tu conexión o bloqueador de contenido y recarga.');document.head.appendChild(sdk);
 
 
-let currentState=null,catalogKind='all',revision=0,searchTimer,libraryRows=[],collection=null,nextSearch=null;
+let currentState=null,catalogKind='all',revision=0,searchTimer,libraryRows=[],collection=null,nextSearch=null,homeCache=null,homeLoading=null;
 const kinds={track:'Canción',playlist:'Playlist',show:'Podcast',episode:'Episodio',album:'Álbum'};
 const el=id=>document.getElementById(id);
 function timeLabel(ms){const s=Math.floor((ms||0)/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
@@ -187,7 +206,49 @@ function renderRows(rows,append=false){
  const target=el('results');if(!append){target.replaceChildren();target.className='tracks';const header=document.createElement('div');header.className='tablehead';for(const [text,cls] of [['#',''],['',''],['Título',''],['Tipo','kind'],['Tiempo','duration'],['','']])header.append(textNode('span',text,cls));target.append(header);}
  for(const [index,row] of rows.entries()){const line=document.createElement('div');line.className='track-row'+(row.available?'':' unavailable');line.append(textNode('span',row.position!=null?row.position+1:index+1,'number'),imageNode(row.image));const title=document.createElement('button');title.append(metadata(row));title.onclick=()=>choose(row);line.append(title,textNode('span',kinds[row.kind],'kind'),textNode('span',row.duration?timeLabel(row.duration):'','duration'),linkNode(row));target.append(line);}
 }
-function showHome(){revision++;collection=null;nextSearch=null;el('more').style.display='none';el('back').style.display='none';el('view-title').textContent='Tu biblioteca';el('view-subtitle').textContent='Abre una playlist y elige la canción que quieres escuchar.';el('results').replaceChildren();el('results').className='cards';for(const row of libraryRows){const card=document.createElement('button');card.className='album-card';card.append(imageNode(row.image),metadata(row));card.onclick=()=>openCollection(row);el('results').append(card);}showHint(libraryRows.length?libraryRows.length+' playlists de tu cuenta':'Actualiza tu biblioteca o busca una canción.');}
+function uniqueItems(rows){const seen=new Set();return rows.filter(row=>row.available&&row.id&&!seen.has(row.id)&&seen.add(row.id));}
+async function homeSuggestions(){
+ if(homeCache&&Date.now()-homeCache.time<300000)return homeCache;
+ if(homeLoading)return homeLoading;
+ homeLoading=(async()=>{
+  const artists=new Set((currentState?.track_window?.current_track?.artists||[]).map(a=>a.name).filter(Boolean)),saved=[];
+  for(const playlist of libraryRows.slice(0,2)){
+   try{const page=await browse('spotify_collection',{kind:'playlist',identifier:playlist.id,offset:0});for(const row of page.items||[]){if(row.kind==='track'){saved.push(row);for(const name of row.artist_names||[])artists.add(name);}}}catch(_){/* An unavailable playlist must not prevent the rest of discovery. */}
+  }
+  const tracks=[],albums=[];let failures=0;
+  const seeds=Array.from(artists).slice(0,2),year=new Date().getFullYear();
+  for(const name of seeds){
+   const artist='artist:"'+name.replace(/["\\]/g,' ')+'"';
+   try{const page=await browse('spotify_search',{query:artist,category:'track',offset:0});tracks.push(...page.items);}catch(_){failures++;}
+   try{const page=await browse('spotify_search',{query:artist+' year:'+String(year-1)+'-'+String(year),category:'album',offset:0});albums.push(...page.items);}catch(_){failures++;}
+  }
+  let podcasts=[];
+  try{const page=await browse('spotify_search',{query:'música',category:'show',offset:0});podcasts=page.items||[];}catch(_){failures++;}
+  const result={time:Date.now(),artists:seeds,tracks:uniqueItems(tracks.length?tracks:saved).slice(0,12),albums:uniqueItems(albums).sort((a,b)=>(b.release_date||'').localeCompare(a.release_date||'')).slice(0,10),podcasts:uniqueItems(podcasts).slice(0,8),failures};
+  if(!result.tracks.length&&!result.albums.length&&!result.podcasts.length)throw Error('Todavía no hay sugerencias disponibles. Reproduce una canción o abre una playlist; después actualiza las recomendaciones.');
+  homeCache=result;return result;
+ })();
+ try{return await homeLoading;}finally{homeLoading=null;}
+}
+function recommendationSection(title,description,rows){
+ if(!rows.length)return;
+ const section=document.createElement('section'),heading=document.createElement('div');heading.className='recommendation-head';heading.append(textNode('h2',title));section.append(heading,textNode('p',description,'recommendation-note'));
+ const cards=document.createElement('div');cards.className='cards';
+ for(const row of rows){const card=document.createElement('button');card.className='album-card';card.append(imageNode(row.image),metadata(row));if(row.kind==='album'&&row.release_date)card.append(textNode('span',row.release_date,'sub'));card.onclick=()=>choose(row);cards.append(card);}
+ section.append(cards);el('results').append(section);
+}
+function renderSuggestions(data){
+ el('results').replaceChildren();
+ if(catalogKind==='playlist'){showHint('Tus playlists guardadas permanecen a la izquierda. Usa el buscador para descubrir otras playlists.');return;}
+ const featured=data.tracks[0];
+ if(catalogKind==='all'&&featured){const banner=document.createElement('section');banner.className='recommendation-hero';const copy=document.createElement('div');copy.append(textNode('span','PARA TU PRÓXIMA CANCIÓN','eyebrow'),textNode('h2',featured.name),textNode('p',featured.subtitle,'muted'));const play=textNode('button','Escuchar ahora');play.onclick=()=>choose(featured);copy.append(play);banner.append(imageNode(featured.image),copy);el('results').append(banner);}
+ if(['all','track'].includes(catalogKind))recommendationSection('De tus artistas','Selección basada en tus playlists y en la canción que está sonando.',data.tracks);
+ if(['all','album'].includes(catalogKind))recommendationSection('Lanzamientos recientes','Álbumes y singles encontrados de tus artistas, ordenados por fecha.',data.albums);
+ if(['all','show','episode'].includes(catalogKind))recommendationSection('Podcasts para explorar','Podcasts de música para descubrir. Abre uno para elegir un episodio.',data.podcasts);
+ if(!el('results').children.length)showHint('No hay sugerencias de este tipo disponibles. Puedes buscar contenido arriba.');
+ else showHint(data.failures?'Algunas sugerencias no están disponibles ahora. Puedes actualizar o buscar en Spotify.':'Sugerencias de VICTOR a partir de tu biblioteca · Tus playlists siguen a la izquierda.');
+}
+async function showHome(){const stamp=++revision;collection=null;nextSearch=null;el('more').style.display='none';el('back').style.display='none';el('view-title').textContent='Hecho para ti';el('view-subtitle').textContent='Tus artistas, nuevos lanzamientos y podcasts para descubrir.';el('results').replaceChildren();el('results').className='home-feed';showHint('Preparando tus recomendaciones…');try{const data=await homeSuggestions();if(stamp===revision)renderSuggestions(data);}catch(e){if(stamp===revision)showHint(e.message);}}
 async function loadLibrary(){try{const rows=await browse('spotify_playlists');libraryRows=Array.isArray(rows)?rows:[];el('library').replaceChildren();for(const row of libraryRows){const button=document.createElement('button');button.className='library-row';button.append(imageNode(row.image),metadata(row));button.onclick=()=>openCollection(row);el('library').append(button);}if(!el('search').value&&!collection)showHome();}catch(e){showHint(e.message);}}
 async function openCollection(row){
  const stamp=++revision;collection=row;el('back').style.display='block';el('more').style.display='none';el('view-title').textContent=row.name||row.nombre;el('view-subtitle').textContent=(kinds[row.kind]||'Playlist')+' · '+(row.subtitle||row.propietario||'Spotify');el('results').replaceChildren();showHint('Cargando canciones…');let offset=0,loaded=0;
@@ -203,8 +264,8 @@ el('search').oninput=()=>{revision++;clearTimeout(searchTimer);searchTimer=setTi
 el('clear-search').onclick=()=>{el('search').value='';showHome();el('search').focus();};
 el('filters').onclick=e=>{const kind=e.target.dataset.kind;if(!kind)return;catalogKind=kind;for(const b of el('filters').children)b.classList.toggle('active',b.dataset.kind===kind);searchCatalog();};
 el('back').onclick=()=>{el('search').value='';showHome();};
-el('home').onclick=()=>{el('search').value='';showHome();loadLibrary();};
-el('refresh-library').onclick=loadLibrary;el('more').onclick=()=>{if(nextSearch!==null)searchCatalog(nextSearch);};
+el('home').onclick=()=>{el('search').value='';loadLibrary();};
+el('refresh-library').onclick=()=>{homeCache=null;loadLibrary();};el('more').onclick=()=>{if(nextSearch!==null)searchCatalog(nextSearch);};
 el('seek').onchange=e=>control('seek',{position:Number(e.target.value)}).catch(e=>message(e.message));
 loadLibrary();
 

@@ -150,7 +150,7 @@ class DesignGUI(unittest.TestCase):
     def test_sections_font_buttons_and_pending_approval(self):
         from PySide6.QtWidgets import QApplication, QPushButton
         from PySide6.QtGui import QFontDatabase
-        from victor.gui.app import GUIManager
+        from tests.gui_support import authenticated_gui as GUIManager
         from victor.security import Approval
         q=QApplication.instance() or QApplication([]);q.setQuitOnLastWindowClosed(False)
         def pump(seconds=.05):
@@ -162,7 +162,7 @@ class DesignGUI(unittest.TestCase):
                 app.show();pump(.2);self.assertIn('Inter',QFontDatabase.families())
                 self.assertTrue({'home','spotify','whatsapp','ia','codex','claude'}.issubset(app.page_widgets))
                 fields={'models' if k.startswith('model:') else k for k in app.settings.fields}
-                self.assertEqual(fields,set(DEFAULTS)-{'auth_methods','account_models','gemini_account_enabled'})
+                self.assertEqual(fields,set(DEFAULTS)-{'auth_methods','account_models','gemini_account_enabled','desktop_orb_position'})
                 for key in app.page_widgets:app.navigate(key);pump(.015);self.assertIs(app.pages.currentWidget(),app.page_widgets[key])
                 app.run_tool=Mock();app.sections.file_source.setText('example.txt');app.sections.select_file('delete_file');app.sections.execute_file()
                 app.run_tool.assert_called_once_with('delete_file',{'path':'example.txt'})

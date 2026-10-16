@@ -63,7 +63,7 @@ class EmbeddedGuiTests(unittest.TestCase):
     def test_embedded_parent_cards_reconnect_and_close(self):
         if os.name!='nt':self.skipTest('Native Windows WebView2')
         from PySide6.QtWidgets import QApplication
-        from victor.gui.app import GUIManager
+        from tests.gui_support import authenticated_gui as GUIManager
         from victor.gui.spotify_embed import SpotifyEmbed
         q=QApplication.instance() or QApplication([]);q.setQuitOnLastWindowClosed(False)
         def until(check,seconds=12):
@@ -112,13 +112,14 @@ class EmbeddedGuiTests(unittest.TestCase):
                 app.spotify_command.assert_called_once_with('spotify_seek',{'position':61000})
                 sections.toggle_player();self.assertTrue(app.player.dismissed)
                 sections.toggle_player();self.assertFalse(app.player.dismissed)
-                for theme,expected in [('Light','rgb(246, 247, 250)'),('Dark','rgb(21, 23, 28)')]:
+                for theme,expected in [('Light','#F1ECF9'),('Dark','#211E32')]:
                     app.config.save({'theme':theme});app.refresh_config();events.clear()
-                    embed.command({'command':'probe','script':"JSON.stringify({page:getComputedStyle(document.documentElement).backgroundColor,surface:getComputedStyle(document.querySelector('.content')).backgroundColor,font:getComputedStyle(document.body).fontSize,transport:getComputedStyle(document.querySelector('.transport')).display})"})
+                    embed.command({'command':'probe','script':"JSON.stringify({page:getComputedStyle(document.documentElement).getPropertyValue('--page').trim(),gradient:getComputedStyle(document.documentElement).backgroundImage,surface:getComputedStyle(document.querySelector('.content')).backgroundColor,font:getComputedStyle(document.body).fontSize,transport:getComputedStyle(document.querySelector('.transport')).display})"})
                     self.assertTrue(until(lambda:any(e['kind']=='probe' and str(e.get('result','')).startswith('"{') for e in events)))
                     palette=json.loads(json.loads(next(e['result'] for e in events if e['kind']=='probe' and str(e.get('result','')).startswith('"{'))))
                     self.assertEqual(palette['page'],expected);self.assertEqual(palette['font'],'13px');self.assertEqual(palette['transport'],'none')
-                    self.assertEqual(palette['surface'],'rgb(255, 255, 255)' if theme=='Light' else 'rgb(29, 32, 39)')
+                    self.assertTrue(palette['gradient'].startswith('linear-gradient('))
+                    self.assertEqual(palette['surface'],'rgba(255, 255, 255, 0.73)' if theme=='Light' else 'rgba(45, 43, 65, 0.78)')
                 app.current_bubble=app.append_message('assistant','…');app.voice_output.speak=Mock()
                 selected=catalog_item(track('GAMINA'),'track')
                 app.handle_event('tool_result',('spotify_play',{'ok':True,'result':{'seleccion':selected,'aceptada_por_api':True}}))

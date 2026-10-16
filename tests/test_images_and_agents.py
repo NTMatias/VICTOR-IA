@@ -134,7 +134,7 @@ class UI(unittest.TestCase):
         while time.monotonic()<deadline:qt.processEvents();time.sleep(.005)
     def test_chooser_image_card_reload_and_agent_terminal_rendering(self):
         from PySide6.QtWidgets import QApplication,QDialog
-        from victor.gui.app import GUIManager
+        from tests.gui_support import authenticated_gui as GUIManager
         qt=QApplication.instance() or QApplication([]);qt.setQuitOnLastWindowClosed(False)
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder:
             app=GUIManager(ConfigManager(Path(folder)))

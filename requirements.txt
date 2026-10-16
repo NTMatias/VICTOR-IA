@@ -14,3 +14,6 @@ PyJWT[crypto]>=2.10,<3
 pywinpty>=3,<4; sys_platform == 'win32'
 pywebrtc-audio==0.2.0
 PyAudioWPatch==0.2.12.7; sys_platform == 'win32'
+edge-tts>=7.3.1,<8
+av>=14,<17
+sounddevice>=0.5,<1
